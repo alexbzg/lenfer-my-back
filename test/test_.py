@@ -11,6 +11,7 @@ import time
 from random import sample, choice
 import base64
 import os
+from datetime import datetime
 CHARS = string.ascii_letters + string.digits
 
 sys.path.append('climatcontroller')
@@ -156,3 +157,32 @@ def test_password_recovery():
     assert req.status_code == 400
     logging.debug(req.text)
     DB.param_update('users', {'login': LOGIN}, {'password': PASSWORD})
+
+def test_post_sensors_data():
+
+    def post(update_token=None, update_post=None):
+        data = {}
+        token_data = {'device_id': 1}
+        update_data(token_data, update_token)
+        post_data = {'device_id': 1,
+            'token': _create_token(token_data),
+            'data': []}
+        update_data(post_data, update_post)
+        return requests.post(API_URI + 'sensors_data', json=post_data)
+
+    #--good request
+    data = [{
+        'sensor_id': 1, 
+        'tstamp': datetime.now().strftime("%m/%d/%Y, %H:%M:%S"),
+        'value': 300}]
+    req = post(update_post={'data': data})
+    req.raise_for_status()
+    #--bad request
+    #----wrong device_id in token
+    req = post(update_token={'device_id': 2})
+    assert req.status_code == 400
+    logging.debug(req.text)
+    #----device w/o sensors
+    req = post(update_token={'device_id': 2}, update_post={'device_id': 2, 'data': data})
+    assert req.status_code == 400
+    logging.debug(req.text)

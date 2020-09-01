@@ -89,9 +89,15 @@ def validate(request_schema=None, token_schema=None, recaptcha_field=None, login
                         logging.debug('current time: ')
                         logging.debug(time.time())
                         validated, error = token_validator(token_data, token_schema)
+                        auth_error = False
                         if not validated or\
-                            ('expires' in token_data and token_data['expires'] < time.time()) or\
-                            token_data['login'] != request_data['login']:
+                            ('expires' in token_data and token_data['expires'] < time.time()):
+                            auth_error = True
+                        else:
+                            for field in token_data.keys():
+                                if field in request_data and token_data[field] != request_data[field]:
+                                    auth_error = True
+                        if auth_error:
                             error_message = 'Неверные или устаревшие данные аутентификации. ' +\
                                 'Попробуйте перелогиниться и/или повторить операцию.\n' +\
                                 'Invalid or obsolete authentification data. ' +\

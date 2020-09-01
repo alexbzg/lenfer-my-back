@@ -31,7 +31,17 @@
         }
     }, 
     "required": ["login", "type"]
+},
+"device": {
+    "type": "object",
+    "properties": {
+        "device_id": {
+            "type": "integer"
+        }
+    }, 
+    "required": ["device_id"]
 }
+
 
 
 }
