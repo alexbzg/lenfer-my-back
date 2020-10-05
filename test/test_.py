@@ -14,7 +14,7 @@ import os
 from datetime import datetime
 CHARS = string.ascii_letters + string.digits
 
-sys.path.append('climatcontroller')
+sys.path.append('lenfer')
 from secret import get_secret, create_token
 from db import DBConn, splice_params
 from conf import CONF
@@ -25,7 +25,7 @@ DB = DBConn(CONF.items('db'))
 DB.verbose = True
 DB.connect()
 
-API_URI = 'https://dev.climatcontroller.ru/api/'
+API_URI = 'https://dev.lenfer.ru/api/'
 
 LOGGER = logging.getLogger(__name__)
 

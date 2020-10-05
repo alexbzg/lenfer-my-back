@@ -131,6 +131,28 @@ def post_sensors_data():
         return bad_request('Device sensors not found')
     return ok_response()
 
+@APP.route('/api/register_device', methods=['POST'])
+@validate(request_schema='register_device', token_schema='auth')
+def post_sensors_data():
+    """stores sensors data in db"""
+    req_data = request.get_json()
+    logging.debug(req_data)
+    device_sensors = DB.execute("""
+        select id 
+            from sensors 
+            where device_id = %(device_id)s
+        """, req_data, keys=True)
+    logging.debug(device_sensors)
+    if device_sensors:
+        for item in req_data['data']:
+            if item['sensor_id'] in device_sensors:
+                DB.get_object('sensors_data', item, create=True)
+    else:
+        return bad_request('Device sensors not found')
+    return ok_response()
+
+
+
 def splice_request(*params):
     return splice_params(request.get_json(), *params)
 
