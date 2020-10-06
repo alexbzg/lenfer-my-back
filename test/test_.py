@@ -186,3 +186,30 @@ def test_post_sensors_data():
     req = post(update_token={'device_id': 2}, update_post={'device_id': 2, 'data': data})
     assert req.status_code == 400
     logging.debug(req.text)
+
+def test_register_device():
+
+    def post(update_token=None, update_post=None):
+        data = {}
+        token_data = {'login': LOGIN, 'type': 'auth'}
+        update_data(token_data, update_token)
+        post_data = {'login': LOGIN,
+            'token': _create_token(token_data),
+            'device_type_id': 2}
+        update_data(post_data, update_post)
+        return requests.post(API_URI + 'register_device', json=post_data)
+
+    #--good request
+    req = post()
+    logging.debug(req.text)
+    req.raise_for_status()
+
+    data = json.loads(req.text)
+    assert data
+    assert 'device_id' in data and data['device_id']
+    assert 'device_token' in data and data['device_token']
+    DB.param_delete('sensors', {'device_id': data['device_id']})
+    DB.param_delete('devices', {'id': data['device_id']})
+    
+
+

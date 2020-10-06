@@ -118,14 +118,15 @@ def post_sensors_data():
     req_data = request.get_json()
     logging.debug(req_data)
     device_sensors = DB.execute("""
-        select id 
+        select device_type_sensor_id as id, id as sensor_id 
             from sensors 
             where device_id = %(device_id)s
         """, req_data, keys=True)
     logging.debug(device_sensors)
     if device_sensors:
         for item in req_data['data']:
-            if item['sensor_id'] in device_sensors:
+            if item['sensor_id'] in device_sensors.keys():
+                item['sensor_id'] = device_sensors[item['sensor_id']]['sensor_id']
                 DB.get_object('sensors_data', item, create=True)
     else:
         return bad_request('Device sensors not found')
@@ -133,25 +134,26 @@ def post_sensors_data():
 
 @APP.route('/api/register_device', methods=['POST'])
 @validate(request_schema='register_device', token_schema='auth')
-def post_sensors_data():
-    """stores sensors data in db"""
+def register_device():
+    """registers device and it's sensors data in db;
+    retruns json {"device_id": _, "device_token": _}"""
     req_data = request.get_json()
-    logging.debug(req_data)
-    device_sensors = DB.execute("""
+    check_device_type = DB.execute("""
         select id 
-            from sensors 
-            where device_id = %(device_id)s
-        """, req_data, keys=True)
-    logging.debug(device_sensors)
-    if device_sensors:
-        for item in req_data['data']:
-            if item['sensor_id'] in device_sensors:
-                DB.get_object('sensors_data', item, create=True)
+            from devices_types 
+            where id = %(device_type_id)s
+        """, req_data)
+    if not check_device_type:
+        return bad_request('Неверный тип устройства. Invalid device type.')
     else:
-        return bad_request('Device sensors not found')
-    return ok_response()
-
-
+        device_db_data = DB.get_object('devices',\
+            splice_request("login", "device_type_id"), create=True)
+        DB.execute("""insert into sensors (device_type_sensor_id, device_id)
+            select id, %(id)s
+            from device_type_sensors
+            where device_type_id = %(device_type_id)s""", device_db_data)
+        token = _create_token({'device_id': device_db_data['id']})
+        return jsonify({'device_id': device_db_data['id'], 'device_token': token})
 
 def splice_request(*params):
     return splice_params(request.get_json(), *params)
