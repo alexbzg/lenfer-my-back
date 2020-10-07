@@ -116,13 +116,11 @@ def password_recovery():
 def post_sensors_data():
     """stores sensors data in db"""
     req_data = request.get_json()
-    logging.debug(req_data)
     device_sensors = DB.execute("""
         select device_type_sensor_id as id, id as sensor_id 
             from sensors 
             where device_id = %(device_id)s
         """, req_data, keys=True)
-    logging.debug(device_sensors)
     if device_sensors:
         for item in req_data['data']:
             if item['sensor_id'] in device_sensors.keys():
@@ -131,6 +129,39 @@ def post_sensors_data():
     else:
         return bad_request('Device sensors not found')
     return ok_response()
+
+@APP.route('/api/device/<device_id>', methods=['GET'])
+def get_device_info(device_id):
+    """returns device info json"""
+    device_id = int(device_id)
+    device_data = DB.execute("""
+        select device_type_id as device_type_id, 
+            devices_types.title as device_type,
+            devices.title as title
+            from devices join devices_types 
+                on device_type_id = devices_types.id
+            where devices.id = %(device_id)s
+        """, {'device_id': device_id}, keys=False)
+    if not device_data:
+        return bad_request('Устройство не найдено. Device not found.')
+    device_data['sensors'] = DB.execute("""
+        select id 
+            from sensors 
+            where device_id = %(device_id)s
+        """, {'device_id': device_id}, keys=False)
+    return jsonify(device_data)
+
+@APP.route('/api/sensors/data', methods=['POST'])
+def get_sensor_data():
+    """returns sensors data for period in json"""
+    req_data = request.get_json()
+    data = DB.execute("""
+        select tstamp, value
+            from sensors_data 
+            where sensor_id = %(sensor_id)s and
+                tstamp between %(begin)s and %(end)s
+        """, req_data, keys=False)
+    return jsonify(data)
 
 @APP.route('/api/register_device', methods=['POST'])
 @validate(request_schema='register_device', token_schema='auth')

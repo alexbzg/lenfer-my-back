@@ -211,5 +211,15 @@ def test_register_device():
     DB.param_delete('sensors', {'device_id': data['device_id']})
     DB.param_delete('devices', {'id': data['device_id']})
     
-
+def test_get_sensor_data():
+    post_data = {'sensor_id': 9,
+        'begin': '2020-10-07 13:00',
+        'end': '2020-10-07 14:00'}
+    req = requests.post(API_URI + 'sensors/data', json=post_data)
+    logging.debug(req.text)
+    req.raise_for_status()
+    data = json.loads(req.text)
+    assert data
+    assert data[0]
+    assert data[0]['value']
 
