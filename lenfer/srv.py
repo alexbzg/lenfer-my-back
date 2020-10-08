@@ -151,7 +151,23 @@ def get_device_info(device_id):
         """, {'device_id': device_id}, keys=False)
     return jsonify(device_data)
 
-@APP.route('/api/sensors/data', methods=['POST'])
+@APP.route('/api/sensor/<sensor_id>', methods=['GET'])
+def get_sensor_info(sensor_id):
+    """returns sensor info json"""
+    sensor_id = int(sensor_id)
+    sensor_data = DB.execute("""
+        select sensors.title as sensor_title, 
+                device_type_sensors.title as device_type_title,
+                sensor_type
+            from sensors join device_type_sensors
+                on device_type_sensor_id = device_type_sensors.id
+            where sensors.id = %(sensor_id)s
+        """, {'sensor_id': sensor_id}, keys=False)
+    if not sensor_data:
+        return bad_request('Сенсор не найден. Sensor not found.')
+    return jsonify(sensor_data)
+
+@APP.route('/api/sensor/data', methods=['POST'])
 def get_sensor_data():
     """returns sensors data for period in json"""
     req_data = request.get_json()
