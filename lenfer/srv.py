@@ -172,7 +172,7 @@ def get_sensor_data():
     """returns sensors data for period in json"""
     req_data = request.get_json()
     data = DB.execute("""
-        select tstamp, value
+        select to_char(tstamp, 'YYYY-MM-DD HH24:MI:SS') as tstamp,  value
             from sensors_data 
             where sensor_id = %(sensor_id)s and
                 tstamp between %(begin)s and %(end)s
