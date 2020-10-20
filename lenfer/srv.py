@@ -132,6 +132,24 @@ def post_sensors_data():
         return bad_request('Device sensors not found')
     return ok_response()
 
+
+@APP.route('/api/users_devices', methods=['POST'])
+@validate(token_schema='auth')
+def users_devices():
+    """returns json users devices list
+    [{id, title, type_id, type_title}]
+    """
+    req_data = request.get_json()
+    devices_data = DB.execute("""
+        select devices.id, device_type_id as type_id, 
+            devices_types.title as type_title,
+            devices.title as title
+            from devices join devices_types 
+                on device_type_id = devices_types.id
+            where devices.login = %(login)s
+        """, req_data, keys=False)
+    return jsonify(devices_data)
+
 @APP.route('/api/device/<device_id>', methods=['GET'])
 def get_device_info(device_id):
     """returns device info json"""
@@ -235,7 +253,7 @@ def register_device():
     if error:
         return bad_request(error)
     else:
-        return "Ok"
+        return ok_response()
 
 def splice_request(*params):
     return splice_params(request.get_json(), *params)

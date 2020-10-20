@@ -243,3 +243,19 @@ def test_get_sensor_data():
     assert data[0]
     assert data[0]['value']
 
+
+def test_users_devices():
+
+    def post(update_token=None, update_post=None):
+        data = {}
+        token_data = {'login': LOGIN, 'type': 'auth'}
+        update_data(token_data, update_token)
+        post_data = {'login': LOGIN, 'token': _create_token(token_data)}
+        update_data(post_data, update_post)
+        return requests.post(API_URI + 'users_devices', json=post_data)
+
+    #--good request
+    req = post()
+    logging.debug(req.text)
+    req.raise_for_status()
+

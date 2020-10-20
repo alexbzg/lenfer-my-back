@@ -76,8 +76,9 @@ ALTER SEQUENCE public.device_type_sensors_id_seq OWNED BY public.device_type_sen
 CREATE TABLE public.devices (
     id integer NOT NULL,
     device_type_id smallint NOT NULL,
-    title character varying(64) NOT NULL,
-    "user" character varying(32) NOT NULL
+    title character varying(64),
+    login character varying(32),
+    local_title character varying(32)
 );
 
 
@@ -144,7 +145,7 @@ ALTER SEQUENCE public.devices_types_id_seq OWNED BY public.devices_types.id;
 CREATE TABLE public.sensors (
     id integer NOT NULL,
     device_type_sensor_id smallint NOT NULL,
-    title character varying(64) NOT NULL,
+    title character varying(64),
     device_id integer NOT NULL
 );
 
@@ -295,7 +296,7 @@ ALTER TABLE ONLY public.devices
 --
 
 ALTER TABLE ONLY public.devices
-    ADD CONSTRAINT devices_user_fkey FOREIGN KEY ("user") REFERENCES public.users(login) NOT VALID;
+    ADD CONSTRAINT devices_user_fkey FOREIGN KEY (login) REFERENCES public.users(login) NOT VALID;
 
 
 --
@@ -315,10 +316,31 @@ ALTER TABLE ONLY public.sensors
 
 
 --
+-- Name: TABLE device_type_sensors; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,UPDATE ON TABLE public.device_type_sensors TO "www-group";
+
+
+--
 -- Name: TABLE devices; Type: ACL; Schema: public; Owner: postgres
 --
 
 GRANT SELECT,INSERT,REFERENCES,DELETE,UPDATE ON TABLE public.devices TO "www-group";
+
+
+--
+-- Name: SEQUENCE devices_id_seq; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON SEQUENCE public.devices_id_seq TO "www-group";
+
+
+--
+-- Name: TABLE devices_types; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT SELECT ON TABLE public.devices_types TO "www-group";
 
 
 --
@@ -333,6 +355,13 @@ GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,UPDATE ON TABLE public.sensors TO 
 --
 
 GRANT SELECT,INSERT,REFERENCES,DELETE,UPDATE ON TABLE public.sensors_data TO "www-group";
+
+
+--
+-- Name: SEQUENCE sensors_id_seq; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON SEQUENCE public.sensors_id_seq TO "www-group";
 
 
 --
