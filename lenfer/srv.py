@@ -6,6 +6,7 @@ import time
 
 from flask import Flask, request, jsonify
 from werkzeug.exceptions import InternalServerError
+from hashids import Hashids
 
 from validator import validate, bad_request
 from db import DBConn, splice_params
@@ -16,6 +17,7 @@ import send_email
 APP = Flask(APP_NAME)
 APP.config.update(CONF['flask'])
 APP.secret_key = get_secret(CONF['files']['secret'])
+HASHIDS = Hashids(salt=APP.secret_key.decode('utf-8'), min_length=6)
 
 with APP.app_context():
     start_logging('srv', CONF['logs']['srv_level'])
@@ -179,11 +181,11 @@ def get_sensor_data():
         """, req_data, keys=False)
     return jsonify(data)
 
-@APP.route('/api/register_device', methods=['POST'])
+@APP.route('/api/create_device', methods=['POST'])
 @validate(request_schema='register_device', token_schema='auth')
-def register_device():
+def create_device():
     """registers device and it's sensors data in db;
-    retruns json {"device_id": _, "device_token": _}"""
+    returns json {"device_id": _, "device_token": _}"""
     req_data = request.get_json()
     check_device_type = DB.execute("""
         select id 
@@ -201,6 +203,39 @@ def register_device():
             where device_type_id = %(device_type_id)s""", device_db_data)
         token = _create_token({'device_id': device_db_data['id']})
         return jsonify({'device_id': device_db_data['id'], 'device_token': token})
+
+
+@APP.route('/api/register_device', methods=['POST'])
+@validate(request_schema='register_device', token_schema='auth')
+def register_device():
+    """binds device to user's account"""
+    req_data = request.get_json()
+    device_id = HASHIDS.decode(req_data['device_hash'])
+    error = None
+    if device_id:
+        check_device = DB.execute("""
+            select id, login 
+                from devices
+                where id = %(device_id)s
+            """, {'device_id': device_id}, False)
+        if check_device:
+            if check_device['login']:
+                if check_device['login'] == req_data['login']:
+                    error = 'Вы уже зарегистрировали это устройство.\n' +\
+                            'You had already registered this device.'
+                else:
+                    error = 'Устройство уже зарегистрировано дркгим пользователем.\n' +\
+                            'Another user had already registered this device.'
+            else:
+                DB.param_update('devices', {'id': device_id}, {'login': req_data['login']})
+        else:
+            error = 'Устройство не найдено. Device not found.'
+    else:
+        error = 'Неверный код устройства. Invalid device code.'
+    if error:
+        return bad_request(error)
+    else:
+        return "Ok"
 
 def splice_request(*params):
     return splice_params(request.get_json(), *params)

@@ -14,6 +14,8 @@ import os
 from datetime import datetime
 CHARS = string.ascii_letters + string.digits
 
+from hashids import Hashids
+
 sys.path.append('lenfer')
 from secret import get_secret, create_token
 from db import DBConn, splice_params
@@ -34,6 +36,8 @@ def _create_token(data):
     return create_token(data, SECRET)
 LOGIN = 'ADMIN'
 PASSWORD = '18231823'
+
+HASHIDS = Hashids(salt=SECRET.decode('utf-8'), min_length=6)
 
 def rnd_string(length=8):
     return ''.join(choice(CHARS) for _ in range(length))
@@ -195,7 +199,7 @@ def test_register_device():
         update_data(token_data, update_token)
         post_data = {'login': LOGIN,
             'token': _create_token(token_data),
-            'device_type_id': 2}
+            'device_hash': HASHIDS.encode(1)}
         update_data(post_data, update_post)
         return requests.post(API_URI + 'register_device', json=post_data)
 
@@ -204,13 +208,29 @@ def test_register_device():
     logging.debug(req.text)
     req.raise_for_status()
 
-    data = json.loads(req.text)
-    assert data
-    assert 'device_id' in data and data['device_id']
-    assert 'device_token' in data and data['device_token']
-    DB.param_delete('sensors', {'device_id': data['device_id']})
-    DB.param_delete('devices', {'id': data['device_id']})
-    
+    #--device is already registerd - same user
+    req = post()
+    logging.debug(req.text)
+    assert req.status_code == 400
+    #--device is already registerd - same user
+    req = post()
+    logging.debug(req.text)
+    assert req.status_code == 400
+    #--device is already registerd - another user
+    req = post(update_token={'login': LOGIN + '__'}, update_post={'login': LOGIN + '__'})
+    logging.debug(req.text)
+    assert req.status_code == 400
+    #--no device id in db
+    req = post(update_post={'device_hash': HASHIDS.encode(2)})
+    logging.debug(req.text)
+    assert req.status_code == 400
+    #--bad hash
+    req = post(update_post={'device_hash': 'aaaaaa'})
+    logging.debug(req.text)
+    assert req.status_code == 400
+
+    DB.param_update('devices', {'id': 1}, {'login': None})
+
 def test_get_sensor_data():
     post_data = {'sensor_id': 9,
         'begin': '2020-10-07 13:00',
