@@ -148,6 +148,10 @@ def users_devices():
                 on device_type_id = devices_types.id
             where devices.login = %(login)s
         """, req_data, keys=False)
+    if isinstance(devices_data, dict):
+        devices_data = [devices_data,]
+    elif not devices_data:
+        devices_data = []
     return jsonify(devices_data)
 
 @APP.route('/api/device/<device_id>', methods=['GET'])
