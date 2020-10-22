@@ -201,7 +201,7 @@ def test_register_device():
             'token': _create_token(token_data),
             'device_hash': HASHIDS.encode(1)}
         update_data(post_data, update_post)
-        return requests.post(API_URI + 'register_device', json=post_data)
+        return requests.post(API_URI + 'device/register', json=post_data)
 
     #--good request
     req = post()

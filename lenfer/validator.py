@@ -16,7 +16,7 @@ from json_utils import load_json
 
 def bad_request(message):
     'Bad request helper function'
-    response = jsonify({'message': message})
+    response = jsonify(message)
     response.status_code = 400
     return response
 

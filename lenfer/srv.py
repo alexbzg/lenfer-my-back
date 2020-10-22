@@ -203,7 +203,7 @@ def get_sensor_data():
         """, req_data, keys=False)
     return jsonify(data)
 
-@APP.route('/api/create_device', methods=['POST'])
+@APP.route('/api/device/create', methods=['POST'])
 @validate(request_schema='register_device', token_schema='auth')
 def create_device():
     """registers device and it's sensors data in db;
@@ -227,7 +227,7 @@ def create_device():
         return jsonify({'device_id': device_db_data['id'], 'device_token': token})
 
 
-@APP.route('/api/register_device', methods=['POST'])
+@APP.route('/api/device/register', methods=['POST'])
 @validate(request_schema='register_device', token_schema='auth')
 def register_device():
     """binds device to user's account"""
