@@ -3,6 +3,7 @@
 """onedif backend"""
 import logging
 import time
+import json
 
 from flask import Flask, request, jsonify
 from werkzeug.exceptions import InternalServerError
@@ -161,7 +162,9 @@ def get_device_info(device_id):
     device_data = DB.execute("""
         select device_type_id as device_type_id, 
             devices_types.title as device_type,
-            devices.title as title
+            devices.title as title, 
+            devices_types.props as props_titles,
+            devices.props as props_values
             from devices join devices_types 
                 on device_type_id = devices_types.id
             where devices.id = %(device_id)s
@@ -169,11 +172,43 @@ def get_device_info(device_id):
     if not device_data:
         return bad_request('Устройство не найдено. Device not found.')
     device_data['sensors'] = DB.execute("""
-        select id 
-            from sensors 
+        select sensors.id, is_master, sensor_type as type,
+            (select value
+                from sensors_data 
+                where sensor_id = sensors.id
+                order by tstamp desc
+                limit 1) as value
+            from sensors join device_type_sensors on
+                device_type_sensors.id = sensors.device_type_sensor_id
             where device_id = %(device_id)s
         """, {'device_id': device_id}, keys=False)
     return jsonify(device_data)
+
+@APP.route('/api/device', methods=['POST'])
+@validate(request_schema='post_device_props', token_schema='auth')
+def post_device_props():
+    """saves new device title/props"""
+    req_data = request.get_json()
+    error = None
+    check_device = DB.execute("""
+        select login 
+        from devices
+        where id = %(id)s""", req_data, keys=False)
+    if check_device:
+        if check_device == req_data['login']:
+            DB.param_update('devices',
+                {'id': req_data['id']},
+                {'title': req_data['title'],
+                    'props': json.dumps(req_data['props'])})
+        else:
+            error = 'Устройство зарегистрировано другим пользователем.'
+    else:
+        error = 'Устройство не найдено.'
+    if error:
+        return bad_request(error)
+    else:
+        return ok_response()
+
 
 @APP.route('/api/sensor/<sensor_id>', methods=['GET'])
 def get_sensor_info(sensor_id):
