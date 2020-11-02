@@ -75,12 +75,11 @@ def validate(request_schema=None, token_schema=None, recaptcha_field=None, login
                 if request_schema:
                     validated, error = request_validator(request_data, request_schema)
                     if not validated:
-                        error_message = 'Invalid request data: ' + error
+                        error_message = 'Некорректный запрос: ' + error
                 if recaptcha_field and current_app.config['ENV'] != 'development':
                     if recaptcha_field not in request_data or not request_data[recaptcha_field] or\
                         not check_recaptcha(request_data[recaptcha_field]):
-                        error_message = 'Проверка на робота не пройдена. Попробуйте еще раз.\n' +\
-                            'Recaptcha check failed. Please try again.'
+                        error_message = 'Проверка на робота не пройдена. Попробуйте еще раз.'
                 if token_schema:
                     if 'token' in request_data and request_data['token']:
                         token_data = decode_token(request_data['token'])
@@ -99,22 +98,17 @@ def validate(request_schema=None, token_schema=None, recaptcha_field=None, login
                                     auth_error = True
                         if auth_error:
                             error_message = 'Неверные или устаревшие данные аутентификации. ' +\
-                                'Попробуйте перелогиниться и/или повторить операцию.\n' +\
-                                'Invalid or obsolete authentification data. ' +\
-                                'Try relogin and/or repeat the operation.'
+                                'Попробуйте перелогиниться и/или повторить операцию.'
                     else:
                         error_message = 'Отсутствуют данные аутентификации. ' +\
-                            'Попробуйте перелогиниться и/или повторить операцию.\n' +\
-                            'No authentification data. ' +\
-                            'Try relogin and/or repeat the operation.'
+                            'Попробуйте перелогиниться и/или повторить операцию.\n'
                 if login:
                     user_data = current_app.db.get_object('users', {'login': request_data['login']}, create=None)
                     if not user_data:
-                        error_message = 'Пользователь не зарегистрирован.\n' +\
-                            'The username is not registered.'
+                        error_message = 'Пользователь не зарегистрирован.\n'
 
             else:
-                error_message = 'No request data found.'
+                error_message = 'Пустой запрос.'
 
             if error_message:
                 return bad_request(error_message)

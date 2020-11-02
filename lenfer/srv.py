@@ -107,11 +107,21 @@ def ok_response():
 @validate(request_schema='login', token_schema='passwordRecovery', recaptcha_field='recaptcha',\
         login=True)
 def password_recovery():
-    """check login data and returns user data with token"""
+    """sets new password after successfull recovery"""
     req_data = request.get_json()
     if not DB.param_update('users',\
         {'login': req_data['login']}, {'password': req_data['password']}):
         raise Exception('Password change failed')
+    return ok_response()
+
+@APP.route('/api/user/settings', methods=['POST'])
+@validate(request_schema='post_user_settings', token_schema='auth', login=True)
+def post_user_settings():
+    """changes user's settings"""
+    req_data = request.get_json()
+    if not DB.param_update('users',\
+        {'email': req_data['email']}, {'password': req_data['password']}):
+        raise Exception('Settings change failed')
     return ok_response()
 
 @APP.route('/api/sensors_data', methods=['POST'])
@@ -135,7 +145,7 @@ def post_sensors_data():
 
 
 @APP.route('/api/users_devices', methods=['POST'])
-@validate(token_schema='auth')
+@validate(token_schema='auth', login=True)
 def users_devices():
     """returns json users devices list
     [{id, title, type_id, type_title}]
@@ -173,9 +183,10 @@ def get_device_info(device_id):
         return bad_request('Устройство не найдено. Device not found.')
     device_data['sensors'] = DB.execute("""
         select sensors.id, is_master, sensor_type as type,
+            sensors.title as title, device_type_sensors.title as default_title,
             (select value
                 from sensors_data 
-                where sensor_id = sensors.id
+                    where sensor_id = sensors.id
                 order by tstamp desc
                 limit 1) as value
             from sensors join device_type_sensors on
@@ -185,7 +196,7 @@ def get_device_info(device_id):
     return jsonify(device_data)
 
 @APP.route('/api/device', methods=['POST'])
-@validate(request_schema='post_device_props', token_schema='auth')
+@validate(request_schema='post_device_props', token_schema='auth', login=True)
 def post_device_props():
     """saves new device title/props"""
     req_data = request.get_json()
@@ -239,7 +250,7 @@ def get_sensor_data():
     return jsonify(data)
 
 @APP.route('/api/device/create', methods=['POST'])
-@validate(request_schema='register_device', token_schema='auth')
+@validate(request_schema='register_device', token_schema='auth', login=True)
 def create_device():
     """registers device and it's sensors data in db;
     returns json {"device_id": _, "device_token": _}"""
@@ -263,7 +274,7 @@ def create_device():
 
 
 @APP.route('/api/device/register', methods=['POST'])
-@validate(request_schema='register_device', token_schema='auth')
+@validate(request_schema='register_device', token_schema='auth', login=True)
 def register_device():
     """binds device to user's account"""
     req_data = request.get_json()
