@@ -195,21 +195,22 @@ def get_device_info(device_id):
         """, {'device_id': device_id}, keys=False)
     return jsonify(device_data)
 
-@APP.route('/api/device', methods=['POST'])
+@APP.route('/api/device/<device_id>', methods=['POST'])
 @validate(request_schema='post_device_props', token_schema='auth', login=True)
-def post_device_props():
+def post_device_props(device_id):
     """saves new device title/props"""
+    device_id = int(device_id)
     req_data = request.get_json()
     error = None
     check_device = DB.execute("""
         select login 
         from devices
-        where id = %(id)s""", req_data, keys=False)
+        where id = %(id)s""", {'id': device_id}, keys=False)
     if check_device:
         if check_device == req_data['login']:
-            DB.param_update('devices',
-                {'id': req_data['id']},
-                {'title': req_data['title'],
+            DB.param_update('devices',\
+                {'id': device_id},\
+                {'title': req_data['title'],\
                     'props': json.dumps(req_data['props'])})
         else:
             error = 'Устройство зарегистрировано другим пользователем.'
@@ -220,6 +221,31 @@ def post_device_props():
     else:
         return ok_response()
 
+@APP.route('/api/sensor/<sensor_id>', methods=['POST'])
+@validate(request_schema='post_sensor_props', token_schema='auth', login=True)
+def post_sensor_info(sensor_id):
+    """updates sensor title and other settings"""
+    sensor_id = int(sensor_id)
+    req_data = request.get_json()
+    error = None
+    check_sensor = DB.execute("""
+        select login 
+        from sensors join devices on sensors.device_id = devices.id
+        where sensors.id = %(id)s""", {'id': sensor_id}, keys=False)
+    if check_sensor:
+        if check_sensor == req_data['login']:
+            DB.param_update('sensors',\
+                {'id': sensor_id},\
+                {'title': req_data['title'],\
+                    'is_master': req_data['is_master']})
+        else:
+            error = 'Датчик зарегистрирован другим пользователем.'
+    else:
+        error = 'Датчик не найден.'
+    if error:
+        return bad_request(error)
+    else:
+        return ok_response()
 
 @APP.route('/api/sensor/<sensor_id>', methods=['GET'])
 def get_sensor_info(sensor_id):
@@ -246,6 +272,7 @@ def get_sensor_data():
             from sensors_data 
             where sensor_id = %(sensor_id)s and
                 tstamp between %(begin)s and %(end)s
+            order by tstamp
         """, req_data, keys=False)
     return jsonify(data)
 
