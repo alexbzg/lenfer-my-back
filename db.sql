@@ -35,6 +35,54 @@ SET default_tablespace = '';
 SET default_with_oids = false;
 
 --
+-- Name: device_schedule_items; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.device_schedule_items (
+    schedule_id integer NOT NULL,
+    day_no smallint NOT NULL,
+    params jsonb
+);
+
+
+ALTER TABLE public.device_schedule_items OWNER TO postgres;
+
+--
+-- Name: device_schedules; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.device_schedules (
+    id integer NOT NULL,
+    login character varying(16),
+    title character varying(64),
+    device_type integer NOT NULL
+);
+
+
+ALTER TABLE public.device_schedules OWNER TO postgres;
+
+--
+-- Name: device_schedules_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.device_schedules_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.device_schedules_id_seq OWNER TO postgres;
+
+--
+-- Name: device_schedules_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.device_schedules_id_seq OWNED BY public.device_schedules.id;
+
+
+--
 -- Name: device_type_sensors; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -78,7 +126,8 @@ CREATE TABLE public.devices (
     device_type_id smallint NOT NULL,
     title character varying(64),
     login character varying(32),
-    local_title character varying(32)
+    local_title character varying(32),
+    props jsonb
 );
 
 
@@ -111,7 +160,8 @@ ALTER SEQUENCE public.devices_id_seq OWNED BY public.devices.id;
 
 CREATE TABLE public.devices_types (
     id integer NOT NULL,
-    title character varying(64) NOT NULL
+    title character varying(64) NOT NULL,
+    props jsonb
 );
 
 
@@ -146,7 +196,8 @@ CREATE TABLE public.sensors (
     id integer NOT NULL,
     device_type_sensor_id smallint NOT NULL,
     title character varying(64),
-    device_id integer NOT NULL
+    device_id integer NOT NULL,
+    is_master boolean DEFAULT false
 );
 
 
@@ -200,6 +251,13 @@ CREATE TABLE public.users (
 ALTER TABLE public.users OWNER TO postgres;
 
 --
+-- Name: device_schedules id; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.device_schedules ALTER COLUMN id SET DEFAULT nextval('public.device_schedules_id_seq'::regclass);
+
+
+--
 -- Name: device_type_sensors id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -225,6 +283,22 @@ ALTER TABLE ONLY public.devices_types ALTER COLUMN id SET DEFAULT nextval('publi
 --
 
 ALTER TABLE ONLY public.sensors ALTER COLUMN id SET DEFAULT nextval('public.sensors_id_seq'::regclass);
+
+
+--
+-- Name: device_schedule_items device_schedule_items_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.device_schedule_items
+    ADD CONSTRAINT device_schedule_items_pkey PRIMARY KEY (schedule_id, day_no);
+
+
+--
+-- Name: device_schedules device_schedules_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.device_schedules
+    ADD CONSTRAINT device_schedules_pkey PRIMARY KEY (id);
 
 
 --
@@ -276,6 +350,30 @@ ALTER TABLE ONLY public.users
 
 
 --
+-- Name: device_schedule_items device_schedule_items_schedule_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.device_schedule_items
+    ADD CONSTRAINT device_schedule_items_schedule_id_fkey FOREIGN KEY (schedule_id) REFERENCES public.device_schedules(id);
+
+
+--
+-- Name: device_schedules device_schedules_device_type_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.device_schedules
+    ADD CONSTRAINT device_schedules_device_type_fkey FOREIGN KEY (device_type) REFERENCES public.devices_types(id);
+
+
+--
+-- Name: device_schedules device_schedules_login_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.device_schedules
+    ADD CONSTRAINT device_schedules_login_fkey FOREIGN KEY (login) REFERENCES public.users(login);
+
+
+--
 -- Name: device_type_sensors device_type_sensors_device_type_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -313,6 +411,27 @@ ALTER TABLE ONLY public.sensors_data
 
 ALTER TABLE ONLY public.sensors
     ADD CONSTRAINT sensors_device_id_fkey FOREIGN KEY (device_id) REFERENCES public.devices(id) NOT VALID;
+
+
+--
+-- Name: TABLE device_schedule_items; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON TABLE public.device_schedule_items TO "www-group";
+
+
+--
+-- Name: TABLE device_schedules; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON TABLE public.device_schedules TO "www-group";
+
+
+--
+-- Name: SEQUENCE device_schedules_id_seq; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON SEQUENCE public.device_schedules_id_seq TO "www-group";
 
 
 --
