@@ -259,3 +259,69 @@ def test_users_devices():
     logging.debug(req.text)
     req.raise_for_status()
 
+def test_device_schedules():
+
+    token_data = {'login': LOGIN, 'type': 'auth'}
+
+    def post_schedule(update_token=None, update_post=None, schedule_id='new'):
+        data = {}
+        update_data(token_data, update_token)
+        post_data = {'login': LOGIN, 'token': _create_token(token_data)}
+        update_data(post_data, update_post)
+        return requests.post(API_URI + 'device_schedule/' + str(schedule_id),\
+            json=post_data)
+
+    def get_list():
+        post_data = {'login': LOGIN, 'token': _create_token(token_data)}
+        return requests.post(API_URI + 'users_device_schedules',\
+            json=post_data)
+
+    SCHEDULE = {'title': rnd_string(),\
+        'device_type_id': 1,\
+        'items': [\
+            {'day_no': 1,\
+                'params': {'foo': 'bar'}},\
+            {'day_no': 2,\
+                'params': {'foo': 'snafu'}}\
+            ]}
+
+    #create schedule
+    req = post_schedule(update_post=SCHEDULE)
+    logging.debug(req.text)
+    req.raise_for_status()
+
+    #get schedule list find id of the just created one
+    req = get_list()
+    logging.debug(req.text)
+    req.raise_for_status()
+    schedules = json.loads(req.text)
+    schedule_from_srv = [x for x in schedules if x['title'] == SCHEDULE['title']][0]
+    schedule_id = schedule_from_srv['id']
+
+    #update schedule
+    SCHEDULE['title'] = rnd_string()
+    SCHEDULE['device_type_id'] = 2
+    req = post_schedule(update_post=SCHEDULE, schedule_id=schedule_id)
+    logging.debug(req.text)
+    req.raise_for_status()
+
+    #get detailed schedule data and check updates
+    req = requests.get(API_URI + 'device_schedule/' + str(schedule_id))
+    logging.debug(req.text)
+    req.raise_for_status()
+    schedule_from_srv = json.loads(req.text)
+    assert SCHEDULE['title'] == schedule_from_srv['title']
+    assert SCHEDULE['device_type_id'] == schedule_from_srv['device_type_id']
+    assert len(schedule_from_srv['items']) == 2
+
+    #delete schedule
+    req = requests.delete(API_URI + 'device_schedule/' + str(schedule_id), 
+            json={'login': LOGIN, 'token': _create_token(token_data)})
+    logging.debug(req.text)
+    req.raise_for_status()
+
+    #check the schedule is no longer exists
+    req = requests.get(API_URI + 'device_schedule/' + str(schedule_id))
+    logging.debug(req.text)
+    assert req.status_code == 400
+

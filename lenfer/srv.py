@@ -165,6 +165,26 @@ def users_devices():
         devices_data = []
     return jsonify(devices_data)
 
+@APP.route('/api/users_device_schedules', methods=['POST'])
+@validate(token_schema='auth', login=True)
+def users_device_schedules():
+    """returns json users devices_schedules list
+    [{id, title, device_type_id, device_type_title}]
+    """
+    req_data = request.get_json()
+    device_schedules_data = DB.execute("""
+        select device_schedules.id, device_type_id as device_type_id, 
+            device_schedules.title, devices_types.title as device_type_title
+            from device_schedules join devices_types 
+                on device_type_id = devices_types.id
+            where device_schedules.login = %(login)s
+        """, req_data, keys=False)
+    if isinstance(device_schedules_data, dict):
+        device_schedules_data = [device_schedules_data,]
+    elif not device_schedules_data:
+        device_schedules_data = []
+    return jsonify(device_schedules_data)
+
 @APP.route('/api/device/<device_id>', methods=['GET'])
 def get_device_info(device_id):
     """returns device info json"""
@@ -195,10 +215,104 @@ def get_device_info(device_id):
         """, {'device_id': device_id}, keys=False)
     return jsonify(device_data)
 
+@APP.route('/api/device_schedule/<schedule_id>', methods=['GET'])
+def get_schedule_data(schedule_id):
+    """returns device schedule itesm (days) in json"""
+    schedule_id = int(schedule_id)
+    schedule_data = DB.execute("""
+        select device_schedules.id, device_type_id as device_type_id, 
+            device_schedules.title, devices_types.title as device_type_title
+            from device_schedules join devices_types 
+                on device_type_id = devices_types.id
+            where device_schedules.id = %(schedule_id)s
+        """, {'schedule_id': schedule_id}, keys=False)
+    if not schedule_data:
+        return bad_request('Шаблон не найден.')
+    schedule_data['items'] = DB.execute("""
+        select day_no, params
+            from device_schedule_items
+            where schedule_id = %(schedule_id)s
+        """, {'schedule_id': schedule_id}, keys=False)
+    return jsonify(schedule_data)
+
+
+@APP.route('/api/device_schedule/<schedule_id>', methods=['DELETE'])
+@validate(token_schema='auth', login=True)
+def delete_schedule(schedule_id):
+    """deletes device schedule from db"""
+    error = None
+    req_data = request.get_json()
+    schedule_id = int(schedule_id)
+    check_schedule = DB.execute("""
+        select login 
+        from device_schedules
+        where id = %(id)s""", {'id': schedule_id}, keys=False)
+    if check_schedule:
+        if check_schedule == req_data['login']:
+            DB.execute("""
+                delete from device_schedule_items
+                where schedule_id = %(schedule_id)s
+                """, {'schedule_id': schedule_id})
+            DB.param_delete('device_schedules', {'id': schedule_id})
+        else:
+            error = 'Шаблон зарегистрирован другим пользователем.'
+    else:
+        error = 'Шаблон не найден.'
+    if error:
+        return bad_request(error)
+    else:
+        return ok_response()
+
+
+@APP.route('/api/device_schedule/<schedule_id>', methods=['POST'])
+@validate(request_schema='post_device_schedule', token_schema='auth', login=True)
+def post_schedule_data(schedule_id):
+    """saves new/edited device schedule to db"""
+    error = None
+    req_data = request.get_json()
+    if schedule_id == 'new':
+        schedule = DB.get_object('device_schedules',\
+            splice_request('login', 'title', 'device_type_id'),\
+            create=True)
+        if schedule:
+            schedule_id = schedule['id']
+        else:
+            raise Exception('Ошибка создания шаблона.')
+    else:
+        schedule_id = int(schedule_id)
+        check_schedule = DB.execute("""
+            select login 
+            from device_schedules
+            where id = %(id)s""", {'id': schedule_id}, keys=False)
+        if check_schedule:
+            if check_schedule == req_data['login']:
+                DB.param_update('device_schedules',\
+                    {'id': schedule_id},\
+                    splice_request('title', 'device_type_id'))
+                DB.execute("""
+                    delete from device_schedule_items
+                    where schedule_id = %(schedule_id)s
+                    """, {'schedule_id': schedule_id})
+            else:
+                error = 'Шаблон зарегистрирован другим пользователем.'
+        else:
+            error = 'Шаблон не найдено.'
+    if error:
+        return bad_request(error)
+    else:
+        DB.execute("""
+            insert into device_schedule_items (schedule_id, day_no, params)
+            values (%(schedule_id)s, %(day_no)s, %(params)s)""",\
+            [{'schedule_id': schedule_id,\
+                'day_no': item['day_no'],\
+                'params': json.dumps(item['params'])}\
+                for item in req_data['items']])
+        return ok_response()
+
 @APP.route('/api/device/<device_id>', methods=['POST'])
 @validate(request_schema='post_device_props', token_schema='auth', login=True)
 def post_device_props(device_id):
-    """saves new device title/props"""
+    """saves updated device title/props to db"""
     device_id = int(device_id)
     req_data = request.get_json()
     error = None
