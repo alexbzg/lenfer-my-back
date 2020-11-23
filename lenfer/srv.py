@@ -163,6 +163,8 @@ def users_devices():
         devices_data = [devices_data,]
     elif not devices_data:
         devices_data = []
+    for device in devices_data:
+        device['hash'] = HASHIDS.encode(device['id'])
     return jsonify(devices_data)
 
 @APP.route('/api/users_device_schedules', methods=['POST'])
@@ -193,6 +195,7 @@ def get_device_info(device_id):
         select device_type_id as device_type_id, 
             devices_types.title as device_type,
             devices.title as title, 
+            schedule_id,
             devices_types.props as props_titles,
             devices.props as props_values
             from devices join devices_types 
@@ -204,16 +207,27 @@ def get_device_info(device_id):
     device_data['sensors'] = DB.execute("""
         select sensors.id, is_master, sensor_type as type,
             sensors.title as title, device_type_sensors.title as default_title,
-            (select value
+            last_data.value, last_data.tstamp
+        from sensors join device_type_sensors on
+                device_type_sensors.id = sensors.device_type_sensor_id,
+            lateral (select value, 
+                to_char(tstamp, 'YYYY-MM-DD HH24:MI:SS') as tstamp
                 from sensors_data 
                     where sensor_id = sensors.id
                 order by tstamp desc
-                limit 1) as value
-            from sensors join device_type_sensors on
-                device_type_sensors.id = sensors.device_type_sensor_id
+                limit 1) as last_data
             where device_id = %(device_id)s
         """, {'device_id': device_id}, keys=False)
     return jsonify(device_data)
+
+@APP.route('/api/devices_types', methods=['GET'])
+def get_devices_types():
+    """returns devices_types info json"""
+    devices_types_data = DB.execute("""
+        select * from devices_types
+        """, keys=False)
+    return jsonify(devices_types_data)
+
 
 @APP.route('/api/device_schedule/<schedule_id>', methods=['GET'])
 def get_schedule_data(schedule_id):
@@ -228,11 +242,14 @@ def get_schedule_data(schedule_id):
         """, {'schedule_id': schedule_id}, keys=False)
     if not schedule_data:
         return bad_request('Шаблон не найден.')
-    schedule_data['items'] = DB.execute("""
+    schedule_items = DB.execute("""
         select day_no, params
             from device_schedule_items
             where schedule_id = %(schedule_id)s
         """, {'schedule_id': schedule_id}, keys=False)
+    if isinstance(schedule_items, dict):
+        schedule_items = [schedule_items,]
+    schedule_data['items'] = schedule_items
     return jsonify(schedule_data)
 
 
@@ -307,7 +324,7 @@ def post_schedule_data(schedule_id):
                 'day_no': item['day_no'],\
                 'params': json.dumps(item['params'])}\
                 for item in req_data['items']])
-        return ok_response()
+        return jsonify({'id': schedule_id})
 
 @APP.route('/api/device/<device_id>', methods=['POST'])
 @validate(request_schema='post_device_props', token_schema='auth', login=True)
@@ -325,6 +342,8 @@ def post_device_props(device_id):
             DB.param_update('devices',\
                 {'id': device_id},\
                 {'title': req_data['title'],\
+                    'schedule_id': req_data['schedule_id']\
+                        if 'schedule_id' in req_data else None,
                     'props': json.dumps(req_data['props'])})
         else:
             error = 'Устройство зарегистрировано другим пользователем.'
