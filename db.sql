@@ -55,7 +55,7 @@ CREATE TABLE public.device_schedules (
     id integer NOT NULL,
     login character varying(16),
     title character varying(64),
-    device_type integer NOT NULL
+    device_type_id integer NOT NULL
 );
 
 
@@ -127,7 +127,8 @@ CREATE TABLE public.devices (
     title character varying(64),
     login character varying(32),
     local_title character varying(32),
-    props jsonb
+    props jsonb,
+    schedule_id integer
 );
 
 
@@ -161,7 +162,8 @@ ALTER SEQUENCE public.devices_id_seq OWNED BY public.devices.id;
 CREATE TABLE public.devices_types (
     id integer NOT NULL,
     title character varying(64) NOT NULL,
-    props jsonb
+    props jsonb,
+    schedule_params jsonb
 );
 
 
@@ -350,6 +352,13 @@ ALTER TABLE ONLY public.users
 
 
 --
+-- Name: devices_schedules_fkey; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX devices_schedules_fkey ON public.devices USING btree (schedule_id);
+
+
+--
 -- Name: device_schedule_items device_schedule_items_schedule_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -362,7 +371,7 @@ ALTER TABLE ONLY public.device_schedule_items
 --
 
 ALTER TABLE ONLY public.device_schedules
-    ADD CONSTRAINT device_schedules_device_type_fkey FOREIGN KEY (device_type) REFERENCES public.devices_types(id);
+    ADD CONSTRAINT device_schedules_device_type_fkey FOREIGN KEY (device_type_id) REFERENCES public.devices_types(id);
 
 
 --
@@ -387,6 +396,14 @@ ALTER TABLE ONLY public.device_type_sensors
 
 ALTER TABLE ONLY public.devices
     ADD CONSTRAINT devices_device_type_id_fkey FOREIGN KEY (device_type_id) REFERENCES public.devices_types(id);
+
+
+--
+-- Name: devices devices_schedule_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.devices
+    ADD CONSTRAINT devices_schedule_id_fkey FOREIGN KEY (schedule_id) REFERENCES public.device_schedules(id) NOT VALID;
 
 
 --

@@ -170,22 +170,31 @@ def users_devices():
 @APP.route('/api/users_device_schedules', methods=['POST'])
 @validate(token_schema='auth', login=True)
 def users_device_schedules():
-    """returns json users devices_schedules list
-    [{id, title, device_type_id, device_type_title}]
+    """returns json users devices_schedules detailed list
+    [{id, title, device_type_id, device_type_title, 
+        items: [{no, params: {}}]}]
     """
     req_data = request.get_json()
-    device_schedules_data = DB.execute("""
+    schedules = DB.execute("""
         select device_schedules.id, device_type_id as device_type_id, 
             device_schedules.title, devices_types.title as device_type_title
             from device_schedules join devices_types 
                 on device_type_id = devices_types.id
             where device_schedules.login = %(login)s
         """, req_data, keys=False)
-    if isinstance(device_schedules_data, dict):
-        device_schedules_data = [device_schedules_data,]
-    elif not device_schedules_data:
-        device_schedules_data = []
-    return jsonify(device_schedules_data)
+    if not schedules:
+        schedules = []
+    if isinstance(schedules, dict):
+        schedules = [schedules,]
+    for schedule in schedules:
+        schedule['items'] = DB.execute("""
+            select day_no, params
+                from device_schedule_items
+                where schedule_id = %(id)s
+            """, schedule, keys=False)
+        if isinstance(schedule['items'], dict):
+            schedule['items'] = [schedule['items'],]
+    return jsonify(schedules)
 
 @APP.route('/api/device/<device_id>', methods=['GET'])
 def get_device_info(device_id):
@@ -343,7 +352,7 @@ def post_device_props(device_id):
                 {'id': device_id},\
                 {'title': req_data['title'],\
                     'schedule_id': req_data['schedule_id']\
-                        if 'schedule_id' in req_data else None,
+                        if 'schedule_id' in req_data else None,\
                     'props': json.dumps(req_data['props'])})
         else:
             error = 'Устройство зарегистрировано другим пользователем.'
