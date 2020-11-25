@@ -4,6 +4,7 @@
 import logging
 import time
 import json
+import hashlib
 
 from flask import Flask, request, jsonify
 from werkzeug.exceptions import InternalServerError
@@ -124,6 +125,29 @@ def post_user_settings():
         raise Exception('Settings change failed')
     return ok_response()
 
+@APP.route('/api/device_updates', methods=['POST'])
+@validate(request_schema='device_updates', token_schema='device')
+def device_updates():
+    """checks for update of device schedule"""
+    req_data = request.get_json()
+    update_data = {}
+    if 'schedule' in req_data:
+        schedule = DB.execute("""
+        select hash, device_schedules.id
+            from devices join device_schedules
+                on devices.schedule_id = device_schedules.id
+            where devices.id = %(device_id)s
+        """, req_data, keys=False)
+        if not schedule:
+            if req_data['schedule']:
+                update_data['schedule'] = {'hash': None}
+        else:
+            if schedule['hash'] != req_data['schedule']:
+                update_data['schedule'] = {\
+                    'items' : schedule_items(schedule['id']),\
+                    'hash': schedule['hash']}
+    return jsonify(update_data)
+
 @APP.route('/api/sensors_data', methods=['POST'])
 @validate(request_schema='post_sensors_data', token_schema='device')
 def post_sensors_data():
@@ -171,7 +195,7 @@ def users_devices():
 @validate(token_schema='auth', login=True)
 def users_device_schedules():
     """returns json users devices_schedules detailed list
-    [{id, title, device_type_id, device_type_title, 
+    [{id, title, device_type_id, device_type_title,
         items: [{no, params: {}}]}]
     """
     req_data = request.get_json()
@@ -187,14 +211,19 @@ def users_device_schedules():
     if isinstance(schedules, dict):
         schedules = [schedules,]
     for schedule in schedules:
-        schedule['items'] = DB.execute("""
-            select day_no, params
-                from device_schedule_items
-                where schedule_id = %(id)s
-            """, schedule, keys=False)
-        if isinstance(schedule['items'], dict):
-            schedule['items'] = [schedule['items'],]
+        schedule['items'] = schedule_items(schedule['id'])
     return jsonify(schedules)
+
+def schedule_items(schedule_id):
+    """returns dict of schedule's items by schedule's id"""
+    items = DB.execute("""
+        select day_no, params
+            from device_schedule_items
+            where schedule_id = %(id)s
+        """, {'id': schedule_id}, keys=False)
+    if isinstance(items, dict):
+        items = [items,]
+    return items
 
 @APP.route('/api/device/<device_id>', methods=['GET'])
 def get_device_info(device_id):
@@ -251,14 +280,7 @@ def get_schedule_data(schedule_id):
         """, {'schedule_id': schedule_id}, keys=False)
     if not schedule_data:
         return bad_request('Шаблон не найден.')
-    schedule_items = DB.execute("""
-        select day_no, params
-            from device_schedule_items
-            where schedule_id = %(schedule_id)s
-        """, {'schedule_id': schedule_id}, keys=False)
-    if isinstance(schedule_items, dict):
-        schedule_items = [schedule_items,]
-    schedule_data['items'] = schedule_items
+    schedule_data['items'] = schedule_items(schedule_id)
     return jsonify(schedule_data)
 
 
@@ -296,9 +318,10 @@ def post_schedule_data(schedule_id):
     """saves new/edited device schedule to db"""
     error = None
     req_data = request.get_json()
+    req_data['hash'] = hashlib.md5(json.dumps(req_data, sort_keys=True).encode('utf-8')).hexdigest()
     if schedule_id == 'new':
         schedule = DB.get_object('device_schedules',\
-            splice_request('login', 'title', 'device_type_id'),\
+            splice_params(req_data, 'login', 'title', 'device_type_id', 'hash'),\
             create=True)
         if schedule:
             schedule_id = schedule['id']
@@ -314,7 +337,7 @@ def post_schedule_data(schedule_id):
             if check_schedule == req_data['login']:
                 DB.param_update('device_schedules',\
                     {'id': schedule_id},\
-                    splice_request('title', 'device_type_id'))
+                    splice_params(req_data, 'title', 'device_type_id', 'hash'))
                 DB.execute("""
                     delete from device_schedule_items
                     where schedule_id = %(schedule_id)s

@@ -55,7 +55,8 @@ CREATE TABLE public.device_schedules (
     id integer NOT NULL,
     login character varying(16),
     title character varying(64),
-    device_type_id integer NOT NULL
+    device_type_id integer NOT NULL,
+    hash character varying(64)
 );
 
 
