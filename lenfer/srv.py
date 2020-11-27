@@ -5,6 +5,7 @@ import logging
 import time
 import json
 import hashlib
+from datetime import datetime
 
 from flask import Flask, request, jsonify
 from werkzeug.exceptions import InternalServerError
@@ -132,20 +133,29 @@ def device_updates():
     req_data = request.get_json()
     update_data = {}
     if 'schedule' in req_data:
+        update_data['schedule'] = {'hash': None, 'start': None}
+
         schedule = DB.execute("""
-        select hash, device_schedules.id
+        select hash, device_schedules.id, devices.props
             from devices join device_schedules
                 on devices.schedule_id = device_schedules.id
             where devices.id = %(device_id)s
         """, req_data, keys=False)
-        if not schedule:
-            if req_data['schedule']:
-                update_data['schedule'] = {'hash': None}
-        else:
-            if schedule['hash'] != req_data['schedule']:
-                update_data['schedule'] = {\
-                    'items' : schedule_items(schedule['id']),\
-                    'hash': schedule['hash']}
+        if schedule:
+            start = datetime.strptime(schedule['props'][0], "%Y-%m-%dT%H:%M:%S.%fZ").timetuple()\
+                if schedule['props'] and schedule['props'][0] else None
+            if schedule['hash'] and start:
+                if (schedule['hash'] != req_data['schedule']['hash']) or\
+                    (not req_data['schedule']['start'] or\
+                    [1 for i, j in zip(start, req_data['schedule']['start'])\
+                        if i != j]):
+                    update_data['schedule'] = {\
+                        'items' : schedule_items(schedule['id']),\
+                        'hash':schedule['hash'],
+                        'start': start}
+                else:
+                    del update_data['schedule']
+
     return jsonify(update_data)
 
 @APP.route('/api/sensors_data', methods=['POST'])
@@ -245,7 +255,7 @@ def get_device_info(device_id):
     device_data['sensors'] = DB.execute("""
         select sensors.id, is_master, sensor_type as type,
             sensors.title as title, device_type_sensors.title as default_title,
-            last_data.value, last_data.tstamp
+            sensors.enabled, last_data.value, last_data.tstamp
         from sensors join device_type_sensors on
                 device_type_sensors.id = sensors.device_type_sensor_id,
             lateral (select value, 
@@ -402,6 +412,7 @@ def post_sensor_info(sensor_id):
             DB.param_update('sensors',\
                 {'id': sensor_id},\
                 {'title': req_data['title'],\
+                    'enabled': req_data['enabled'],\
                     'is_master': req_data['is_master']})
         else:
             error = 'Датчик зарегистрирован другим пользователем.'
