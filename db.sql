@@ -200,7 +200,8 @@ CREATE TABLE public.sensors (
     device_type_sensor_id smallint NOT NULL,
     title character varying(64),
     device_id integer NOT NULL,
-    is_master boolean DEFAULT false
+    is_master boolean DEFAULT false,
+    enabled boolean DEFAULT true
 );
 
 
@@ -334,6 +335,14 @@ ALTER TABLE ONLY public.devices_types
 
 ALTER TABLE ONLY public.sensors_data
     ADD CONSTRAINT sensors_data_pkey PRIMARY KEY (tstamp, sensor_id);
+
+
+--
+-- Name: sensors_data sensors_data_tstamp_check; Type: CHECK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE public.sensors_data
+    ADD CONSTRAINT sensors_data_tstamp_check CHECK ((tstamp < (now() + '1 day'::interval))) NOT VALID;
 
 
 --
