@@ -230,6 +230,7 @@ def schedule_items(schedule_id):
         select day_no, params
             from device_schedule_items
             where schedule_id = %(id)s
+            order by day_no
         """, {'id': schedule_id}, keys=False)
     if isinstance(items, dict):
         items = [items,]
