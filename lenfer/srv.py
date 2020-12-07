@@ -177,6 +177,30 @@ def post_sensors_data():
         return bad_request('Device sensors not found')
     return ok_response()
 
+@APP.route('/api/devices_log/post', methods=['POST'])
+@validate(request_schema='post_devices_log', token_schema='device')
+def post_devices_log():
+    """stores devices log entries in db"""
+    req_data = request.get_json()
+    for entry in req_data['entries']:
+        entry['device_id'] = req_data['device_id']
+        DB.get_object('devices_log', entry, create=True)
+    return ok_response()
+
+@APP.route('/api/devices_log', methods=['POST'])
+def get_devices_log():
+    """returns device log for period in json"""
+    req_data = request.get_json()
+    data = DB.execute("""
+        select to_char(log_tstamp, 'YYYY-MM-DD HH24:MI:SS') as log_tstamp,
+            to_char(rcvd_tstamp, 'YYYY-MM-DD HH24:MI:SS') as rcvd_tstamp,
+            txt
+            from devices_log
+            where device_id = %(device_id)s and
+                log_tstamp between %(begin)s and %(end)s
+            order by log_tstamp
+        """, req_data, keys=False)
+    return jsonify(data)
 
 @APP.route('/api/users_devices', methods=['POST'])
 @validate(token_schema='auth', login=True)

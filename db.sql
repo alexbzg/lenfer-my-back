@@ -157,6 +157,42 @@ ALTER SEQUENCE public.devices_id_seq OWNED BY public.devices.id;
 
 
 --
+-- Name: devices_log; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.devices_log (
+    id integer NOT NULL,
+    log_tstamp timestamp without time zone NOT NULL,
+    device_id integer NOT NULL,
+    rcvd_tstamp timestamp without time zone DEFAULT now() NOT NULL,
+    txt character varying(512) NOT NULL
+);
+
+
+ALTER TABLE public.devices_log OWNER TO postgres;
+
+--
+-- Name: devices_log_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.devices_log_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.devices_log_id_seq OWNER TO postgres;
+
+--
+-- Name: devices_log_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.devices_log_id_seq OWNED BY public.devices_log.id;
+
+
+--
 -- Name: devices_types; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -276,6 +312,13 @@ ALTER TABLE ONLY public.devices ALTER COLUMN id SET DEFAULT nextval('public.devi
 
 
 --
+-- Name: devices_log id; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.devices_log ALTER COLUMN id SET DEFAULT nextval('public.devices_log_id_seq'::regclass);
+
+
+--
 -- Name: devices_types id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -311,6 +354,14 @@ ALTER TABLE ONLY public.device_schedules
 
 ALTER TABLE ONLY public.device_type_sensors
     ADD CONSTRAINT device_type_sensors_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: devices_log devices_log_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.devices_log
+    ADD CONSTRAINT devices_log_pkey PRIMARY KEY (id);
 
 
 --
@@ -409,6 +460,14 @@ ALTER TABLE ONLY public.devices
 
 
 --
+-- Name: devices_log devices_log_device_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.devices_log
+    ADD CONSTRAINT devices_log_device_id_fkey FOREIGN KEY (device_id) REFERENCES public.devices(id);
+
+
+--
 -- Name: devices devices_schedule_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -480,6 +539,20 @@ GRANT SELECT,INSERT,REFERENCES,DELETE,UPDATE ON TABLE public.devices TO "www-gro
 --
 
 GRANT ALL ON SEQUENCE public.devices_id_seq TO "www-group";
+
+
+--
+-- Name: TABLE devices_log; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT SELECT,INSERT,DELETE,TRUNCATE,UPDATE ON TABLE public.devices_log TO "www-group";
+
+
+--
+-- Name: SEQUENCE devices_log_id_seq; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON SEQUENCE public.devices_log_id_seq TO "www-group";
 
 
 --

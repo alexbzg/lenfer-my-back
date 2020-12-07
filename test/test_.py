@@ -11,7 +11,7 @@ import time
 from random import sample, choice
 import base64
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 CHARS = string.ascii_letters + string.digits
 
 from hashids import Hashids
@@ -324,4 +324,37 @@ def test_device_schedules():
     req = requests.get(API_URI + 'device_schedule/' + str(schedule_id))
     logging.debug(req.text)
     assert req.status_code == 400
+
+
+def test_device_log():
+
+    def post(update_token=None, update_post=None):
+        data = {}
+        token_data = {'device_id': 1}
+        update_data(token_data, update_token)
+        post_data = {'device_id': 1,
+            'token': _create_token(token_data),
+            'entries': []}
+        update_data(post_data, update_post)
+        return requests.post(API_URI + 'devices_log/post', json=post_data)
+
+    #--good request
+    entries = [{
+        'log_tstamp': (datetime.now() - timedelta(minutes=idx)).strftime("%m/%d/%Y, %H:%M:%S"),
+        'txt': rnd_string(512)} for idx in range(2)]
+    req = post(update_post={'entries': entries})
+    req.raise_for_status()
+
+    get_req_data = {'device_id': 1,
+        'end': datetime.now().strftime("%m/%d/%Y, %H:%M:%S"),
+        'begin':  (datetime.now() - timedelta(hours=1)).strftime("%m/%d/%Y, %H:%M:%S")
+    }
+    req = requests.post(API_URI + 'devices_log', json=get_req_data)
+    logging.debug(req.text)
+    req.raise_for_status()
+    data = json.loads(req.text)
+    assert data
+    assert data[-1]
+    assert data[-1]['txt'] == entries[0]['txt'] 
+    DB.execute('delete from devices_log where device_id = 1')
 
