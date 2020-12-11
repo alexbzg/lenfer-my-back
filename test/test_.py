@@ -326,6 +326,29 @@ def test_device_schedules():
     assert req.status_code == 400
 
 
+def test_device_updates():
+
+    DEVICE_ID = 9
+
+    def post(update_token=None, update_post=None):
+        data = {}
+        token_data = {'device_id': DEVICE_ID}
+        update_data(token_data, update_token)
+        post_data = {'device_id': DEVICE_ID, 
+            'token': _create_token(token_data),
+            'schedule': {'hash': None, 'start': None}, 
+            'props': {
+                'timers': []
+                }
+            }
+        update_data(post_data, update_post)
+        return requests.post(API_URI + 'device_updates', json=post_data)
+
+    #--good request
+    req = post()
+    logging.debug(req.text)
+    req.raise_for_status()
+
 def test_device_log():
 
     def post(update_token=None, update_post=None):
@@ -335,7 +358,7 @@ def test_device_log():
         post_data = {'device_id': 1,
             'token': _create_token(token_data),
             'entries': []}
-        update_data(post_data, update_post)
+        update_data(post_data, update_post )
         return requests.post(API_URI + 'devices_log/post', json=post_data)
 
     #--good request

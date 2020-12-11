@@ -129,34 +129,60 @@ def post_user_settings():
 @APP.route('/api/device_updates', methods=['POST'])
 @validate(request_schema='device_updates', token_schema='device')
 def device_updates():
-    """checks for update of device schedule"""
+    """checks for update of device schedule/elegible props"""
     req_data = request.get_json()
     update_data = {}
+    device_data = DB.execute("""
+        select device_schedules.hash as schedule_hash, 
+            device_schedules.id as schedule_id, 
+            devices.props as props_values,
+            devices_types.props as props_headers
+        from devices join devices_types
+            on devices.device_type_id = devices_types.id
+            left join device_schedules
+            on devices.schedule_id = device_schedules.id
+        where devices.id = %(device_id)s""", req_data, keys=False)
+
     if 'schedule' in req_data:
         update_data['schedule'] = {'hash': None, 'start': None}
-
-        schedule = DB.execute("""
-        select hash, device_schedules.id, devices.props
-            from devices join device_schedules
-                on devices.schedule_id = device_schedules.id
-            where devices.id = %(device_id)s
-        """, req_data, keys=False)
-        if schedule:
-            start = datetime.strptime(schedule['props'][0], "%Y-%m-%dT%H:%M:%S.%fZ").timetuple()\
-                if schedule['props'] and schedule['props'][0] else None
-            if schedule['hash'] and start:
-                if (schedule['hash'] != req_data['schedule']['hash']) or\
+        if device_data and device_data['schedule_id']:
+            schedule_start = None
+            for idx, prop_header in enumerate(device_data['props_headers']):
+                if 'schedule_start' in prop_header and prop_header['schedule_start']:
+                    schedule_start = (datetime.strptime(device_data['props_values'][idx],\
+                        "%Y-%m-%dT%H:%M:%S.%fZ").timetuple()\
+                        if device_data['props_values'] and\
+                            len(device_data['props_values']) > idx\
+                        else None)
+                    break
+            if device_data['schedule_hash'] and schedule_start:
+                if (device_data['schedule_hash'] != req_data['schedule']['hash']) or\
                     (not req_data['schedule']['start'] or\
-                    [1 for i, j in zip(start, req_data['schedule']['start'])\
+                    [1 for i, j in zip(schedule_start, req_data['schedule']['start'])\
                         if i != j]):
                     update_data['schedule'] = {\
-                        'items' : schedule_items(schedule['id']),\
-                        'hash':schedule['hash'],
-                        'start': start}
+                        'items': schedule_items(device_data['schedule_id']),\
+                        'hash': device_data['schedule_hash'],
+                        'start': schedule_start}
                 else:
                     del update_data['schedule']
 
+    if 'props' in req_data:
+        srv_props = props_list_to_dict(device_data['props_headers'], device_data['props_values'])
+        update_data['props'] = {id: value for id, value in srv_props.items()\
+            if id in req_data['props'] and data_hash(value) != data_hash(req_data['props'][id])}
+
     return jsonify(update_data)
+
+
+def props_list_to_dict(headers, values):
+    """converts device properties list from db to dictionary"""
+    return {header['id']: (([\
+        props_list_to_dict(header['items'], item)\
+            for item in values[idx]])\
+        if 'items' in header else values[idx])\
+        for idx, header in enumerate(headers)}
+
 
 @APP.route('/api/sensors_data', methods=['POST'])
 @validate(request_schema='post_sensors_data', token_schema='device')
@@ -346,6 +372,9 @@ def delete_schedule(schedule_id):
     else:
         return ok_response()
 
+def data_hash(data):
+    """returns definitive data hash for changes tracking"""
+    return hashlib.md5(json.dumps(data, sort_keys=True).encode('utf-8')).hexdigest()
 
 @APP.route('/api/device_schedule/<schedule_id>', methods=['POST'])
 @validate(request_schema='post_device_schedule', token_schema='auth', login=True)
