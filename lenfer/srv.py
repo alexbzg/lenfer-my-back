@@ -169,6 +169,8 @@ def device_updates():
 
     if 'props' in req_data:
         srv_props = props_list_to_dict(device_data['props_headers'], device_data['props_values'])
+        if req_data['device_id'] == 11:
+            logging.debug(srv_props)
         update_data['props'] = {id: value for id, value in srv_props.items()\
             if id in req_data['props'] and data_hash(value) != data_hash(req_data['props'][id])}
 
@@ -224,8 +226,10 @@ def get_devices_log():
             from devices_log
             where device_id = %(device_id)s and
                 log_tstamp between %(begin)s and %(end)s
-            order by log_tstamp
+            order by log_tstamp desc
         """, req_data, keys=False)
+    if isinstance(data, dict):
+        data = [data,]
     return jsonify(data)
 
 @APP.route('/api/users_devices', methods=['POST'])
@@ -242,6 +246,7 @@ def users_devices():
             from devices join devices_types 
                 on device_type_id = devices_types.id
             where devices.login = %(login)s
+            order by devices.id
         """, req_data, keys=False)
     if isinstance(devices_data, dict):
         devices_data = [devices_data,]
