@@ -16,6 +16,7 @@ from db import DBConn, splice_params
 from conf import CONF, APP_NAME, start_logging
 from secret import get_secret, create_token
 import send_email
+from hash import data_hash
 
 APP = Flask(APP_NAME)
 APP.config.update(CONF['flask'])
@@ -376,10 +377,6 @@ def delete_schedule(schedule_id):
         return bad_request(error)
     else:
         return ok_response()
-
-def data_hash(data):
-    """returns definitive data hash for changes tracking"""
-    return hashlib.md5(json.dumps(data, sort_keys=True).encode('utf-8')).hexdigest()
 
 @APP.route('/api/device_schedule/<schedule_id>', methods=['POST'])
 @validate(request_schema='post_device_schedule', token_schema='auth', login=True)

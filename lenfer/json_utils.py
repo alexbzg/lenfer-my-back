@@ -31,9 +31,11 @@ def load_json(path_json):
         logging.exception("Error loading " + path_json)
         return None
 
-def save_json(data, path_json):
+def save_json(data, path_json, **kwargs):
     """saves data to json file"""
+    if 'ensure_ascii' not in kwargs:
+        kwargs['ensure_ascii'] = False
     with open(path_json, 'w') as file:
-        json.dump(data, file, ensure_ascii=False)
+        json.dump(data, file, **kwargs)
 
 
