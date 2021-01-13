@@ -129,13 +129,14 @@ def post_user_settings():
 
 @APP.route('/api/device_updates', methods=['POST'])
 @validate(request_schema='device_updates', token_schema='device')
-def device_updates():
+def device_updates_test():
     """checks for update of device schedule/elegible props"""
     req_data = request.get_json()
     update_data = {}
     device_data = DB.execute("""
         select device_schedules.hash as schedule_hash, 
             device_schedules.id as schedule_id, 
+            devices_types.schedule_params,
             devices.props as props_values,
             devices_types.props as props_headers
         from devices join devices_types
@@ -156,17 +157,31 @@ def device_updates():
                             len(device_data['props_values']) > idx\
                         else None)
                     break
-            if device_data['schedule_hash'] and schedule_start:
-                if (device_data['schedule_hash'] != req_data['schedule']['hash']) or\
-                    (not req_data['schedule']['start'] or\
-                    [1 for i, j in zip(schedule_start, req_data['schedule']['start'])\
-                        if i != j]):
-                    update_data['schedule'] = {\
-                        'items': schedule_items(device_data['schedule_id']),\
-                        'hash': device_data['schedule_hash'],
-                        'start': schedule_start}
-                else:
-                    del update_data['schedule']
+            if device_data['schedule_hash'] and schedule_start and\
+                (device_data['schedule_hash'] != req_data['schedule']['hash']) or\
+                (not req_data['schedule']['start'] or\
+                [1 for i, j in zip(schedule_start, req_data['schedule']['start'])\
+                    if i != j]):
+
+                schedule = {
+                    'params': list(device_data['schedule_params']),\
+                    'items': [],\
+                    'hash': device_data['schedule_hash'],\
+                    'start': schedule_start}
+                for item in schedule_items(device_data['schedule_id']):
+                    schedule_item = [None]*len(schedule['params'])
+                    for param, value in item['params'].items():
+                        param_entry = None
+                        if device_data['schedule_params'][param]['type'] == 'float_delta':
+                            param_entry = [float(value['value']), float(value['delta'])]
+                        param_idx = schedule['params'].index(param)
+                        schedule_item[param_idx] = param_entry
+                    schedule['items'].append(schedule_item)
+
+                update_data['schedule'] = schedule
+
+            else:
+                del update_data['schedule']
 
     if 'props' in req_data:
         srv_props = props_list_to_dict(device_data['props_headers'], device_data['props_values'])
@@ -176,7 +191,6 @@ def device_updates():
             if id in req_data['props'] and data_hash(value) != data_hash(req_data['props'][id])}
 
     return jsonify(update_data)
-
 
 def props_list_to_dict(headers, values):
     """converts device properties list from db to dictionary"""
