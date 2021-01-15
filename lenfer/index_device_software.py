@@ -20,9 +20,10 @@ if not os.path.isdir(ARGS.path):
 
 INDEX_PATH = os.path.join(ARGS.path, 'index.json')
 SOFTWARE_ROOT_PATH = os.path.join(ARGS.path, 'software')
-INDEX = load_json(INDEX_PATH)
-if not INDEX:
-    INDEX = {}
+INDEX = {}
+INDEX_PREV = load_json(INDEX_PATH)
+if not INDEX_PREV:
+    INDEX_PREV = {}
 DEVICES_TYPES = {}
 
 for root, dirs, files in os.walk(SOFTWARE_ROOT_PATH):
@@ -33,8 +34,7 @@ for root, dirs, files in os.walk(SOFTWARE_ROOT_PATH):
         file_hash = None
         with open(file_path, 'rb') as file_handle:
             file_hash = hashlib.md5(file_handle.read()).hexdigest()
-        if not file_web_path in INDEX:
-            INDEX[file_web_path] = {}
+        INDEX[file_web_path] = INDEX_PREV[file_web_path] if file_web_path in INDEX_PREV else {}
         INDEX[file_web_path]['hash'] = file_hash
         if 'devices_types' in INDEX[file_web_path]:
             for type in INDEX[file_web_path]['devices_types']:
