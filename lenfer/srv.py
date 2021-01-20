@@ -127,11 +127,18 @@ def post_user_settings():
         raise Exception('Settings change failed')
     return ok_response()
 
+def update_device_last_contact(device_id):
+    DB.execute("""
+        update devices 
+        set last_contact = now()
+        where id = %(device_id)s""", {'device_id': device_id})
+
 @APP.route('/api/device_updates', methods=['POST'])
 @validate(request_schema='device_updates', token_schema='device')
-def device_updates_test():
+def device_updates():
     """checks for update of device schedule/elegible props"""
     req_data = request.get_json()
+    update_device_last_contact(req_data['device_id'])
     update_data = {}
     device_data = DB.execute("""
         select device_schedules.hash as schedule_hash, 
@@ -225,6 +232,7 @@ def post_sensors_data():
 def post_devices_log():
     """stores devices log entries in db"""
     req_data = request.get_json()
+    update_device_last_contact(req_data['device_id'])
     for entry in req_data['entries']:
         entry['device_id'] = req_data['device_id']
         DB.get_object('devices_log', entry, create=True)
