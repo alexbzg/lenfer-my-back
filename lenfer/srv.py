@@ -213,15 +213,24 @@ def props_list_to_dict(headers, values):
 def post_sensors_data():
     """stores sensors data in db"""
     req_data = request.get_json()
+    update_device_last_contact(req_data['device_id'])
     device_sensors = DB.execute("""
         select device_type_sensor_id as id, id as sensor_id 
             from sensors 
             where device_id = %(device_id)s
         """, req_data, keys=True)
     if device_sensors:
+        device_rtc = DB.execute("""
+            select rtc 
+            from devices_types join devices 
+                on devices.device_type_id = devices_types.id
+            where devices.id = %(device_id)s
+            """, req_data)
         for item in req_data['data']:
-            if item['sensor_id'] in device_sensors.keys():
+            if item['sensor_id'] in device_sensors.keys():                
                 item['sensor_id'] = device_sensors[item['sensor_id']]['sensor_id']
+                if not device_rtc:
+                    del item['tstamp']
                 DB.get_object('sensors_data', item, create=True)
     else:
         return bad_request('Device sensors not found')
