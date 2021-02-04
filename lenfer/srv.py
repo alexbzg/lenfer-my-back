@@ -341,18 +341,20 @@ def get_device_info(device_id):
     if not device_data:
         return bad_request('Устройство не найдено. Device not found.')
     device_data['sensors'] = DB.execute("""
-        select sensors.id, is_master, sensor_type as type,
-            sensors.title as title, device_type_sensors.title as default_title,
-            sensors.enabled, last_data.value, last_data.tstamp
-        from sensors join device_type_sensors on
-                device_type_sensors.id = sensors.device_type_sensor_id,
-            lateral (select value, 
-                to_char(tstamp, 'YYYY-MM-DD HH24:MI:SS') as tstamp
-                from sensors_data 
-                    where sensor_id = sensors.id
-                order by tstamp desc
-                limit 1) as last_data
-            where device_id = %(device_id)s
+		select * from
+		(select sensors.id, is_master, sensor_type as type,
+					sensors.title as title, device_type_sensors.title as default_title,
+					sensors.enabled
+				from sensors join device_type_sensors on
+						device_type_sensors.id = sensors.device_type_sensor_id
+						where device_id = %(device_id)s) as sensors
+					left join lateral (select value,
+						to_char(tstamp, 'YYYY-MM-DD HH24:MI:SS') as tstamp
+						from sensors_data
+							where sensor_id = sensors.id
+						order by tstamp desc
+						limit 1) as last_data 
+						on true
         """, {'device_id': device_id}, keys=False)
     return jsonify(device_data)
 
