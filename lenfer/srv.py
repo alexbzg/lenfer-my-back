@@ -227,7 +227,7 @@ def post_sensors_data():
             where devices.id = %(device_id)s
             """, req_data)
         for item in req_data['data']:
-            if item['sensor_id'] in device_sensors.keys():                
+            if item['sensor_id'] in device_sensors.keys():
                 item['sensor_id'] = device_sensors[item['sensor_id']]['sensor_id']
                 if not device_rtc:
                     del item['tstamp']
@@ -470,12 +470,15 @@ def post_device_props(device_id):
         where id = %(id)s""", {'id': device_id}, keys=False)
     if check_device:
         if check_device == req_data['login']:
-            DB.param_update('devices',\
-                {'id': device_id},\
-                {'title': req_data['title'],\
+            upd_params = {}
+            if 'delete' in req_data and req_data['delete']:
+                upd_params = {'login': None}
+            else:
+                upd_params = {'title': req_data['title'],\
                     'schedule_id': req_data['schedule_id']\
                         if 'schedule_id' in req_data else None,\
-                    'props': json.dumps(req_data['props'])})
+                    'props': json.dumps(req_data['props'])}
+            DB.param_update('devices', {'id': device_id}, upd_params)
         else:
             error = 'Устройство зарегистрировано другим пользователем.'
     else:
