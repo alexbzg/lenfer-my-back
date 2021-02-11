@@ -191,11 +191,13 @@ def device_updates():
                 del update_data['schedule']
 
     if 'props' in req_data:
-        srv_props = props_list_to_dict(device_data['props_headers'], device_data['props_values'])
-        if req_data['device_id'] == 11:
-            logging.debug(srv_props)
+        props_dict = props_list_to_dict(device_data['props_headers'], device_data['props_values'])
+        update_props = [prop['id'] for prop in device_data['props_headers']
+                        if 'device_updates' in prop and prop['device_updates']]
+        srv_props = {prop: prop_value for prop, prop_value in props_dict.items()
+                     if prop in update_props}
         update_data['props'] = {id: value for id, value in srv_props.items()\
-            if id in req_data['props'] and data_hash(value) != data_hash(req_data['props'][id])}
+            if id not in req_data['props'] or data_hash(value) != data_hash(req_data['props'][id])}
 
     return jsonify(update_data)
 

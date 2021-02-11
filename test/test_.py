@@ -328,7 +328,7 @@ def test_device_schedules():
 
 def test_device_updates():
 
-    DEVICE_ID = 9
+    DEVICE_ID = 15
 
     def post(update_token=None, update_post=None):
         data = {}
@@ -337,9 +337,7 @@ def test_device_updates():
         post_data = {'device_id': DEVICE_ID, 
             'token': _create_token(token_data),
             'schedule': {'hash': None, 'start': None}, 
-            'props': {
-                'timers': []
-                }
+            'props': {}
             }
         update_data(post_data, update_post)
         return requests.post(API_URI + 'device_updates', json=post_data)
