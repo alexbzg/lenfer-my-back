@@ -28,6 +28,7 @@ DB.verbose = True
 DB.connect()
 
 API_URI = 'https://dev.lenfer.ru/api/'
+#API_URI = 'http://my.lenfer.ru/api/'
 
 LOGGER = logging.getLogger(__name__)
 

@@ -196,8 +196,8 @@ def device_updates():
                         if 'device_updates' in prop and prop['device_updates']]
         srv_props = {prop: prop_value for prop, prop_value in props_dict.items()
                      if prop in update_props}
-        update_data['props'] = {id: value for id, value in srv_props.items()\
-            if id not in req_data['props'] or data_hash(value) != data_hash(req_data['props'][id])}
+        if data_hash(req_data['props']) != data_hash(srv_props):
+            update_data['props'] = srv_props
 
     return jsonify(update_data)
 
