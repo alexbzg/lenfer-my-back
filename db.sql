@@ -91,7 +91,8 @@ CREATE TABLE public.device_type_sensors (
     device_type_id smallint NOT NULL,
     id integer NOT NULL,
     sensor_type character varying(64) NOT NULL,
-    title character varying(64) NOT NULL
+    title character varying(64) NOT NULL,
+    is_master boolean DEFAULT false
 );
 
 
@@ -129,7 +130,9 @@ CREATE TABLE public.devices (
     login character varying(32),
     local_title character varying(32),
     props jsonb,
-    schedule_id integer
+    schedule_id integer,
+    last_contact timestamp without time zone,
+    timezone character varying(64) DEFAULT 'Europe/Moscow'::character varying NOT NULL
 );
 
 
@@ -200,7 +203,10 @@ CREATE TABLE public.devices_types (
     id integer NOT NULL,
     title character varying(64) NOT NULL,
     props jsonb,
-    schedule_params jsonb
+    schedule_params jsonb,
+    rtc boolean DEFAULT true NOT NULL,
+    software_type character varying(32),
+    updates boolean DEFAULT true
 );
 
 
@@ -248,7 +254,7 @@ ALTER TABLE public.sensors OWNER TO postgres;
 --
 
 CREATE TABLE public.sensors_data (
-    tstamp timestamp without time zone NOT NULL,
+    tstamp timestamp without time zone DEFAULT now() NOT NULL,
     sensor_id integer NOT NULL,
     value numeric(8,2)
 );
@@ -385,7 +391,7 @@ ALTER TABLE ONLY public.devices_types
 --
 
 ALTER TABLE ONLY public.sensors_data
-    ADD CONSTRAINT sensors_data_pkey PRIMARY KEY (tstamp, sensor_id);
+    ADD CONSTRAINT sensors_data_pkey PRIMARY KEY (sensor_id, tstamp);
 
 
 --

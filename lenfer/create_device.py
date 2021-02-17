@@ -9,7 +9,7 @@ from hashids import Hashids
 
 from secret import get_secret, create_token
 from conf import CONF
-from db import DBConn, splice_params
+from db import DBConn
 
 PARSER = argparse.ArgumentParser(description="lenfer device creator")
 PARSER.add_argument('type')
@@ -25,25 +25,25 @@ PARAMS = {'device_type_id': ARGS.type, 'login': ARGS.user}
 SECRET = get_secret(CONF['files']['secret']).decode('utf-8')
 HASHIDS = Hashids(salt=SECRET, min_length=6)
 
-
-check_device_type = DB.execute("""
-    select id 
+DEVICE_TYPE_DATA = DB.execute("""
+    select id, software_type, updates 
         from devices_types 
         where id = %(device_type_id)s
     """, PARAMS)
-if not check_device_type:
+if not DEVICE_TYPE_DATA:
     sys.exit('Invalid device type.')
-    
-device_db_data = DB.get_object('devices', PARAMS, create=True)
-DB.execute("""insert into sensors (device_type_sensor_id, device_id)
-    select id, %(id)s
+
+DEVICE_DB_DATA = DB.get_object('devices', PARAMS, create=True)
+DB.execute("""insert into sensors (device_type_sensor_id, device_id, is_master)
+    select id, %(id)s, is_master
     from device_type_sensors
-    where device_type_id = %(device_type_id)s""", device_db_data)
-device_data = {
-    'id': device_db_data['id'],
-    'token': create_token({'device_id': device_db_data['id']}, SECRET),
-    'hash': HASHIDS.encode(device_db_data['id'])
+    where device_type_id = %(device_type_id)s""", DEVICE_DB_DATA)
+DEVICE_DATA = {
+    'id': DEVICE_DB_DATA['id'],
+    'token': create_token({'device_id': DEVICE_DB_DATA['id']}, SECRET),
+    'hash': HASHIDS.encode(DEVICE_DB_DATA['id']),
+    'type': DEVICE_TYPE_DATA['software_type'],
+    'updates': DEVICE_TYPE_DATA['updates']
     }
 
-print(json.dumps(device_data))
-
+print(json.dumps(DEVICE_DATA))
