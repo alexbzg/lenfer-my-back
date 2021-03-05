@@ -107,8 +107,8 @@ def ok_response():
     return jsonify({'message': 'Ok'})
 
 @APP.route('/api/password_recovery', methods=['POST'])
-@validate(request_schema='login', token_schema='passwordRecovery', recaptcha_field='recaptcha',\
-        login=True)
+@validate(request_schema='login', token_schema='passwordRecovery',
+          recaptcha_field='recaptcha', login=True)
 def password_recovery():
     """sets new password after successfull recovery"""
     req_data = request.get_json()
@@ -280,7 +280,7 @@ def users_devices():
             from devices join devices_types 
                 on device_type_id = devices_types.id
             where devices.login = %(login)s
-            order by devices.id
+            order by devices.title
         """, req_data, keys=False)
     if isinstance(devices_data, dict):
         devices_data = [devices_data,]
@@ -288,6 +288,22 @@ def users_devices():
         devices_data = []
     for device in devices_data:
         device['hash'] = HASHIDS.encode(device['id'])
+    return jsonify(devices_data)
+
+@APP.route('/api/devices_status', methods=['POST'])
+@validate(token_schema='auth', login=True)
+def devices_status():
+    """returns json users devices last connect timestamp list
+    {id: timestamp}"""
+    req_data = request.get_json()
+    devices_data = DB.execute("""
+        select devices.id, 
+            to_char(last_contact, 'YYYY-MM-DD HH24:MI:SS') as last_tstamp
+            from devices
+            where devices.login = %(login)s
+        """, req_data, keys=True)
+    if not devices_data:
+        devices_data = {}
     return jsonify(devices_data)
 
 @APP.route('/api/users_device_schedules', methods=['POST'])

@@ -348,6 +348,20 @@ def test_device_updates():
     logging.debug(req.text)
     req.raise_for_status()
 
+def test_devices_status():
+    def post(update_token=None, update_post=None):
+        data = {}
+        token_data = {'login': LOGIN, 'type': 'auth'}
+        update_data(token_data, update_token)
+        post_data = {'login': LOGIN, 'token': _create_token(token_data)}
+        update_data(post_data, update_post)
+        return requests.post(API_URI + 'devices_status', json=post_data)
+
+    #--good request
+    req = post()
+    logging.debug(req.text)
+    req.raise_for_status()
+
 def test_device_log():
 
     def post(update_token=None, update_post=None):
