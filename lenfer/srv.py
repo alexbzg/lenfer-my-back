@@ -55,15 +55,15 @@ def register_user():
     user_data = request.get_json()
     user_exists = DB.get_object('users', {'login': user_data['login']}, create=False)
     if user_exists:
-        return bad_request('Пользователь с этим именем уже зарегистрирован.\n' +\
-                'This username is already exists.')
-    return send_user_data(user_data, create=True)
+        return bad_request('Пользователь с этим именем уже зарегистрирован.')
+    return send_user_data(splice_params(user_data, 'login', 'email', 'password'),\
+        create=True)
 
 @APP.route('/api/login', methods=['POST'])
 @validate(request_schema='login')
 def login():
-    """check login data and returns user data with token"""
-    return send_user_data(request.get_json())
+    """checks login data and returns user data with token"""
+    return send_user_data(splice_request('login', 'password'))
 
 @APP.route('/api/password_recovery_request', methods=['POST'])
 @validate(request_schema='passwordRecoveryRequest', recaptcha_field='recaptcha')
@@ -276,6 +276,7 @@ def users_devices():
     devices_data = DB.execute("""
         select devices.id, device_type_id as type_id, 
             devices_types.title as type_title,
+            schedule_id,
             devices.title as title
             from devices join devices_types 
                 on device_type_id = devices_types.id
