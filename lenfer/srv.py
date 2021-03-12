@@ -266,6 +266,31 @@ def get_devices_log():
         data = [data,]
     return jsonify(data)
 
+@APP.route('/api/users_device/public/<login>', methods=['GET'])
+def get_device_info(login):
+    """returns json users devices list
+    [{id, title, type_id, type_title}]
+    """
+    login = login.upper()
+    devices_data = DB.execute("""
+        select devices.id, device_type_id as type_id, 
+            devices_types.title as type_title,
+            schedule_id,
+            devices.title as title
+            from devices join devices_types 
+                on device_type_id = devices_types.id
+            where devices.login = %(login)s and devices.public_access
+            order by devices.title
+        """, req_data, keys=False)
+    if isinstance(devices_data, dict):
+        devices_data = [devices_data,]
+    elif not devices_data:
+        devices_data = []
+    for device in devices_data:
+        device['hash'] = HASHIDS.encode(device['id'])
+    return jsonify(devices_data)
+
+
 @APP.route('/api/users_devices', methods=['POST'])
 @validate(token_schema='auth', login=True)
 def users_devices():
@@ -276,7 +301,7 @@ def users_devices():
     devices_data = DB.execute("""
         select devices.id, device_type_id as type_id, 
             devices_types.title as type_title,
-            schedule_id,
+            schedule_id, public_access,
             devices.title as title
             from devices join devices_types 
                 on device_type_id = devices_types.id
