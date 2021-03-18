@@ -32,6 +32,11 @@ DB.connect()
 DB.verbose = True
 APP.db = DB
 
+def _create_public_id():
+    user_count = DB.execute('select sum(1) from users;')
+    return int(hashlib.sha256(str(user_count).encode('utf-8')).hexdigest(), 16)\
+            % 10**6
+
 def _create_token(data):
     return create_token(data, APP.secret_key)
 
@@ -56,7 +61,8 @@ def register_user():
     user_exists = DB.get_object('users', {'login': user_data['login']}, create=False)
     if user_exists:
         return bad_request('Пользователь с этим именем уже зарегистрирован.')
-    return send_user_data(splice_params(user_data, 'login', 'email', 'password'),\
+    user_data['public_id'] = _create_public_id()
+    return send_user_data(splice_params(user_data, 'login', 'public_id', 'password'),\
         create=True)
 
 @APP.route('/api/login', methods=['POST'])
@@ -267,29 +273,28 @@ def get_devices_log():
     return jsonify(data)
 
 @APP.route('/api/users_device/public/<login>', methods=['GET'])
-def get_device_info(login):
+def get_users_devices_public(public_id):
     """returns json users devices list
     [{id, title, type_id, type_title}]
+    by his web_id
     """
-    login = login.upper()
+    public_id = public_id.lower()    
     devices_data = DB.execute("""
         select devices.id, device_type_id as type_id, 
             devices_types.title as type_title,
             schedule_id,
             devices.title as title
             from devices join devices_types 
-                on device_type_id = devices_types.id
-            where devices.login = %(login)s and devices.public_access
+                on device_type_id = devices_types.id join users 
+                on devices.login = users.login
+            where users.public_id = %(public_id)s and devices.public_access
             order by devices.title
-        """, req_data, keys=False)
+        """, {'public_id': public_id}, keys=False)
     if isinstance(devices_data, dict):
         devices_data = [devices_data,]
     elif not devices_data:
         devices_data = []
-    for device in devices_data:
-        device['hash'] = HASHIDS.encode(device['id'])
     return jsonify(devices_data)
-
 
 @APP.route('/api/users_devices', methods=['POST'])
 @validate(token_schema='auth', login=True)
@@ -384,6 +389,7 @@ def get_device_info(device_id):
         """, {'device_id': device_id}, keys=False)
     if not device_data:
         return bad_request('Устройство не найдено. Device not found.')
+    device_data['hash'] = HASHIDS.encode(device_id)
     device_data['sensors'] = DB.execute("""
 		select * from
 		(select sensors.id, sensors.is_master, sensor_type as type, device_type_sensor_id,
@@ -501,6 +507,20 @@ def post_schedule_data(schedule_id):
                 'params': json.dumps(item['params'])}\
                 for item in req_data['items']])
         return jsonify({'id': schedule_id})
+
+@APP.route('/api/device/public_access', methods=['POST'])
+@validate(request_schema='post_devices_public_access', token_schema='auth', login=True)
+def post_devices_public_access():
+    """saves updated devices public access values to db"""
+    req_data = request.get_json()
+    for item in req_data['values']:
+        item['login'] = req_data['login']
+    DB.execute("""
+        update devices
+        set public_access = %(public_access)s
+        where id = %(id)s and login = %(login)s
+        """, req_data['values'])
+    return ok_response()
 
 @APP.route('/api/device/<device_id>', methods=['POST'])
 @validate(request_schema='post_device_props', token_schema='auth', login=True)
