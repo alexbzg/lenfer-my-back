@@ -71,6 +71,12 @@ def login():
     """checks login data and returns user data with token"""
     return send_user_data(splice_request('login', 'password'))
 
+@APP.route('/api/user_data', methods=['POST'])
+@validate(token_schema='auth', login=True)
+def get_user_data():
+    """returns user data by token"""
+    return send_user_data(splice_request('login'))
+
 @APP.route('/api/password_recovery_request', methods=['POST'])
 @validate(request_schema='passwordRecoveryRequest', recaptcha_field='recaptcha')
 def password_recovery_request():
@@ -128,8 +134,8 @@ def password_recovery():
 def post_user_settings():
     """changes user's settings"""
     req_data = request.get_json()
-    if not DB.param_update('users',\
-        {'email': req_data['email']}, {'password': req_data['password']}):
+    if not DB.param_update('users', {'login': req_data['login']},\
+        {'public_id': req_data['public_id'], 'password': req_data['password']}):
         raise Exception('Settings change failed')
     return ok_response()
 
@@ -272,11 +278,11 @@ def get_devices_log():
         data = [data,]
     return jsonify(data)
 
-@APP.route('/api/users_device/public/<login>', methods=['GET'])
+@APP.route('/api/users_device/public/<public_id>', methods=['GET'])
 def get_users_devices_public(public_id):
     """returns json users devices list
     [{id, title, type_id, type_title}]
-    by his web_id
+    by his public_id
     """
     public_id = public_id.lower()    
     devices_data = DB.execute("""
