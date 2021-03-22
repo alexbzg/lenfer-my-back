@@ -135,8 +135,8 @@ def post_user_settings():
     """changes user's settings"""
     req_data = request.get_json()
     if not DB.param_update('users', {'login': req_data['login']},\
-        {'public_id': req_data['public_id'], 'password': req_data['password']}):
-        raise Exception('Settings change failed')
+        {'password': req_data['password']}):
+        raise Exception('Ошибка сохранения настроек.')
     return ok_response()
 
 def update_device_last_contact(device_id):
@@ -514,18 +514,21 @@ def post_schedule_data(schedule_id):
                 for item in req_data['items']])
         return jsonify({'id': schedule_id})
 
-@APP.route('/api/device/public_access', methods=['POST'])
-@validate(request_schema='post_devices_public_access', token_schema='auth', login=True)
-def post_devices_public_access():
-    """saves updated devices public access values to db"""
+@APP.route('/api/user/public', methods=['POST'])
+@validate(request_schema='post_user_public_settings', token_schema='auth', login=True)
+def post_user_public_settings():
+    """saves updated user's public_id and devices public access settings to db"""
     req_data = request.get_json()
-    for item in req_data['values']:
+    if not DB.param_update('users', {'login': req_data['login']},\
+        {'public_id': req_data['public_id']}):
+        raise Exception('Ошибка сохранения настроек.')
+    for item in req_data['devices']:
         item['login'] = req_data['login']
     DB.execute("""
         update devices
         set public_access = %(public_access)s
         where id = %(id)s and login = %(login)s
-        """, req_data['values'])
+        """, req_data['devices'])
     return ok_response()
 
 @APP.route('/api/device/<device_id>', methods=['POST'])
