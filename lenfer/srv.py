@@ -327,21 +327,35 @@ def users_devices():
         device['hash'] = HASHIDS.encode(device['id'])
     return jsonify(devices_data)
 
-@APP.route('/api/devices_status', methods=['POST'])
-@validate(token_schema='auth', login=True)
-def devices_status():
-    """returns json users devices last connect timestamp list
+def send_devices_status(login=None, public_id=None):
+    """sends json users by login or public_id (public access only) 
+    devices last connect timestamp list
     {id: timestamp}"""
-    req_data = request.get_json()
-    devices_data = DB.execute("""
+    sql = """
         select devices.id, 
             to_char(last_contact, 'YYYY-MM-DD HH24:MI:SS') as last_tstamp
-            from devices
-            where devices.login = %(login)s
-        """, req_data, keys=True)
+            from devices """
+    sql += """join users 
+                on devices.login = users.login
+            where users.public_id = %(public_id)s and devices.public_access
+        """ if public_id else "where devices.login = %(login)s"
+    devices_data = DB.execute(sql, {'public_id': public_id, 'login': login},\
+        keys=True)
     if not devices_data:
         devices_data = {}
     return jsonify(devices_data)
+
+@APP.route('/api/devices_status/public/<public_id>', methods=['GET'])
+def devices_status_public(public_id):
+    """returns json user's public devices last connect timestamp list"""
+    return send_devices_status(public_id=public_id.lower())
+
+@APP.route('/api/devices_status', methods=['POST'])
+@validate(token_schema='auth', login=True)
+def devices_status():
+    """returns json logged user's devices last connect timestamp list"""
+    req_data = request.get_json()
+    return send_devices_status(login=req_data['login'])
 
 @APP.route('/api/users_device_schedules', methods=['POST'])
 @validate(token_schema='auth', login=True)
