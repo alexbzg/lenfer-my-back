@@ -553,15 +553,25 @@ def post_device_props(device_id):
     req_data = request.get_json()
     error = None
     check_device = DB.execute("""
-        select login 
-        from devices
-        where id = %(id)s""", {'id': device_id}, keys=False)
+        select login, devices_types.props as props_headers
+            from devices join devices_types
+                on devices.device_type_id = devices_types.id
+            where devices.id = %(id)s""", {'id': device_id}, keys=False)
     if check_device:
-        if check_device == req_data['login']:
+        if check_device['login'] == req_data['login']:
             upd_params = {}
             if 'delete' in req_data and req_data['delete']:
                 upd_params = {'login': None}
             else:
+
+                timers_prop_id = None
+                for index, item in enumerate(check_device['props_headers']):
+                    if item['id'] == 'timers':
+                        timers_prop_id = index
+                        break
+                if timers_prop_id and req_data['props'][timers_prop_id]:
+                    req_data['props'][timers_prop_id].sort(key=lambda item: item[0])
+
                 upd_params = {'title': req_data['title'],\
                     'schedule_id': req_data['schedule_id']\
                         if 'schedule_id' in req_data else None,\
