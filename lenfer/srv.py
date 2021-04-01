@@ -427,6 +427,25 @@ def get_device_info(device_id):
 						on true
         order by device_type_sensor_id
         """, {'device_id': device_id}, keys=False)
+    device_data['switches'] = DB.execute("""
+		select * from
+		(select device_type_switch_id as id,
+					devices_switches.title as title, device_type_switches.title as default_title,
+					enabled
+				from devices_switches join device_type_switches on
+						device_type_switches.id = devices_switches.device_type_switch_id
+						where device_id = %(device_id)s) as switches
+					left join lateral (select state,
+						to_char(tstamp, 'YYYY-MM-DD HH24:MI:SS') as tstamp
+						from devices_switches_state
+							where devices_switches_state.device_id = %(device_id)s
+                                and devices_switches_state.device_type_switch_id = switches.id
+						order by tstamp desc
+						limit 1) as last_data 
+						on true
+        order by id
+        """, {'device_id': device_id}, keys=False)
+
     return jsonify(device_data)
 
 @APP.route('/api/devices_types', methods=['GET'])
@@ -588,7 +607,7 @@ def post_device_props(device_id):
 
 @APP.route('/api/sensor/<sensor_id>', methods=['POST'])
 @validate(request_schema='post_sensor_props', token_schema='auth', login=True)
-def post_sensor_info(sensor_id):
+def post_sensor_settings(sensor_id):
     """updates sensor title and other settings"""
     sensor_id = int(sensor_id)
     req_data = request.get_json()
@@ -612,6 +631,37 @@ def post_sensor_info(sensor_id):
         return bad_request(error)
     else:
         return ok_response()
+
+@APP.route('/api/switch/<device_id>/<switch_id>', methods=['POST'])
+@validate(request_schema='post_switch_props', token_schema='auth', login=True)
+def post_switch_settings(sensor_id):
+    """updates switch title and other settings"""
+    device_id = int(device_id)
+    switch_id = int(switch_id)
+    req_data = request.get_json()
+    error = None
+    check_switch = DB.execute("""
+        select login 
+        from devices, devices_switches
+        where device.id = %(device_id)s and 
+            devices_switch.device_type_switch.id = %(switch_id)s""",\
+        {'device_id': device_id, 'switch_id': switch_id}, keys=False)
+    if check_switch:
+        if check_ == req_data['login']:
+            DB.param_update('devices_switches',\
+                {'device_id': device_id, 'device_type_switch_id': switch_id},\
+                {'title': req_data['title'],\
+                    'enabled': req_data['enabled']})
+        else:
+            error = 'Датчик зарегистрирован другим пользователем.'
+    else:
+        error = 'Датчик не найден.'
+    if error:
+        return bad_request(error)
+    else:
+        return ok_response()
+
+
 
 @APP.route('/api/sensor/<sensor_id>', methods=['GET'])
 def get_sensor_info(sensor_id):

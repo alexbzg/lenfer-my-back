@@ -120,6 +120,40 @@ ALTER SEQUENCE public.device_type_sensors_id_seq OWNED BY public.device_type_sen
 
 
 --
+-- Name: device_type_switches; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.device_type_switches (
+    id smallint NOT NULL,
+    device_type_id smallint NOT NULL,
+    title character varying(64) NOT NULL
+);
+
+
+ALTER TABLE public.device_type_switches OWNER TO postgres;
+
+--
+-- Name: device_type_switches_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.device_type_switches_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.device_type_switches_id_seq OWNER TO postgres;
+
+--
+-- Name: device_type_switches_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.device_type_switches_id_seq OWNED BY public.device_type_switches.id;
+
+
+--
 -- Name: devices; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -132,7 +166,8 @@ CREATE TABLE public.devices (
     props jsonb,
     schedule_id integer,
     last_contact timestamp without time zone,
-    timezone character varying(64) DEFAULT 'Europe/Moscow'::character varying NOT NULL
+    timezone character varying(64) DEFAULT 'Europe/Moscow'::character varying NOT NULL,
+    public_access boolean DEFAULT false NOT NULL
 );
 
 
@@ -194,6 +229,35 @@ ALTER TABLE public.devices_log_id_seq OWNER TO postgres;
 
 ALTER SEQUENCE public.devices_log_id_seq OWNED BY public.devices_log.id;
 
+
+--
+-- Name: devices_switches; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.devices_switches (
+    device_id integer NOT NULL,
+    device_type_switch_id smallint NOT NULL,
+    title character varying(64),
+    enabled boolean DEFAULT false NOT NULL
+);
+
+
+ALTER TABLE public.devices_switches OWNER TO postgres;
+
+--
+-- Name: devices_switches_state; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.devices_switches_state (
+    tstamp timestamp without time zone NOT NULL,
+    device_id integer NOT NULL,
+    device_type_switch_id smallint NOT NULL,
+    state boolean NOT NULL,
+    CONSTRAINT devices_switches_state_tstamp_check CHECK ((tstamp < (now() + '1 day'::interval)))
+);
+
+
+ALTER TABLE public.devices_switches_state OWNER TO postgres;
 
 --
 -- Name: devices_types; Type: TABLE; Schema: public; Owner: postgres
@@ -290,7 +354,7 @@ ALTER SEQUENCE public.sensors_id_seq OWNED BY public.sensors.id;
 CREATE TABLE public.users (
     login character varying(16) NOT NULL,
     password character varying(64) NOT NULL,
-    email character varying(64)
+    public_id character varying(64)
 );
 
 
@@ -308,6 +372,13 @@ ALTER TABLE ONLY public.device_schedules ALTER COLUMN id SET DEFAULT nextval('pu
 --
 
 ALTER TABLE ONLY public.device_type_sensors ALTER COLUMN id SET DEFAULT nextval('public.device_type_sensors_id_seq'::regclass);
+
+
+--
+-- Name: device_type_switches id; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.device_type_switches ALTER COLUMN id SET DEFAULT nextval('public.device_type_switches_id_seq'::regclass);
 
 
 --
@@ -363,6 +434,14 @@ ALTER TABLE ONLY public.device_type_sensors
 
 
 --
+-- Name: device_type_switches device_type_switches_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.device_type_switches
+    ADD CONSTRAINT device_type_switches_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: devices_log devices_log_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -376,6 +455,22 @@ ALTER TABLE ONLY public.devices_log
 
 ALTER TABLE ONLY public.devices
     ADD CONSTRAINT devices_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: devices_switches devices_switches_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.devices_switches
+    ADD CONSTRAINT devices_switches_pkey PRIMARY KEY (device_id, device_type_switch_id);
+
+
+--
+-- Name: devices_switches_state devices_switches_state_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.devices_switches_state
+    ADD CONSTRAINT devices_switches_state_pkey PRIMARY KEY (tstamp, device_id, device_type_switch_id);
 
 
 --
@@ -458,6 +553,14 @@ ALTER TABLE ONLY public.device_type_sensors
 
 
 --
+-- Name: device_type_switches device_type_switches_device_type_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.device_type_switches
+    ADD CONSTRAINT device_type_switches_device_type_id_fkey FOREIGN KEY (device_type_id) REFERENCES public.devices_types(id);
+
+
+--
 -- Name: devices devices_device_type_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -479,6 +582,14 @@ ALTER TABLE ONLY public.devices_log
 
 ALTER TABLE ONLY public.devices
     ADD CONSTRAINT devices_schedule_id_fkey FOREIGN KEY (schedule_id) REFERENCES public.device_schedules(id) NOT VALID;
+
+
+--
+-- Name: devices_switches_state devices_switches_state_device_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.devices_switches_state
+    ADD CONSTRAINT devices_switches_state_device_id_fkey FOREIGN KEY (device_id, device_type_switch_id) REFERENCES public.devices_switches(device_id, device_type_switch_id);
 
 
 --
@@ -534,6 +645,13 @@ GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,UPDATE ON TABLE public.device_type
 
 
 --
+-- Name: TABLE device_type_switches; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT SELECT,REFERENCES ON TABLE public.device_type_switches TO "www-group";
+
+
+--
 -- Name: TABLE devices; Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -559,6 +677,20 @@ GRANT SELECT,INSERT,DELETE,TRUNCATE,UPDATE ON TABLE public.devices_log TO "www-g
 --
 
 GRANT ALL ON SEQUENCE public.devices_log_id_seq TO "www-group";
+
+
+--
+-- Name: TABLE devices_switches; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,UPDATE ON TABLE public.devices_switches TO "www-group";
+
+
+--
+-- Name: TABLE devices_switches_state; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,UPDATE ON TABLE public.devices_switches_state TO "www-group";
 
 
 --
