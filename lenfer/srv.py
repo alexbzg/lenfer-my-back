@@ -222,6 +222,26 @@ def props_list_to_dict(headers, values):
         for idx, header in enumerate(headers)}
 
 
+@APP.route('/api/switches_state', methods=['POST'])
+@validate(request_schema='post_switches_state', token_schema='device')
+def post_switches_state():
+    """stores device switches state in db"""
+    req_data = request.get_json()
+    update_device_last_contact(req_data['device_id'])
+    device_rtc = DB.execute("""
+        select rtc 
+        from devices_types join devices 
+            on devices.device_type_id = devices_types.id
+        where devices.id = %(device_id)s
+        """, req_data)
+    for item in req_data['data']:
+        if not device_rtc:
+            del item['tstamp']
+        item['device_id'] = req_data['device_id']
+        DB.get_object('devices_switches_state', item, create=True)
+    return ok_response()
+
+
 @APP.route('/api/sensors_data', methods=['POST'])
 @validate(request_schema='post_sensors_data', token_schema='device')
 def post_sensors_data():

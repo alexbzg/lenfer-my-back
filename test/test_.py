@@ -192,6 +192,27 @@ def test_post_sensors_data():
     assert req.status_code == 400
     logging.debug(req.text)
 
+def test_post_switches_state():
+
+    def post(update_token=None, update_post=None):
+        data = {}
+        token_data = {'device_id': 23}
+        update_data(token_data, update_token)
+        post_data = {'device_id': 23,
+            'token': _create_token(token_data),
+            'data': []}
+        update_data(post_data, update_post)
+        return requests.post(API_URI + 'switches_state', json=post_data)
+
+    #--good request
+    data = [{
+        'device_type_switch_id': 1, 
+        'tstamp': datetime.now().strftime("%m/%d/%Y, %H:%M:%S"),
+        'state': True}]
+    req = post(update_post={'data': data})
+    req.raise_for_status()
+    logging.debug(req.text)
+
 def test_register_device():
 
     def post(update_token=None, update_post=None):

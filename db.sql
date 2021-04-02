@@ -249,7 +249,7 @@ ALTER TABLE public.devices_switches OWNER TO postgres;
 --
 
 CREATE TABLE public.devices_switches_state (
-    tstamp timestamp without time zone NOT NULL,
+    tstamp timestamp without time zone DEFAULT now() NOT NULL,
     device_id integer NOT NULL,
     device_type_switch_id smallint NOT NULL,
     state boolean NOT NULL,
