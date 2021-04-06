@@ -451,7 +451,7 @@ def get_device_info(device_id):
 		select * from
 		(select device_type_switch_id as id,
 					devices_switches.title as title, device_type_switches.title as default_title,
-					enabled
+					enabled, device_type_switches.type
 				from devices_switches join device_type_switches on
 						device_type_switches.id = devices_switches.device_type_switch_id
 						where device_id = %(device_id)s) as switches
@@ -654,7 +654,7 @@ def post_sensor_settings(sensor_id):
 
 @APP.route('/api/switch/<device_id>/<switch_id>', methods=['POST'])
 @validate(request_schema='post_switch_props', token_schema='auth', login=True)
-def post_switch_settings(sensor_id):
+def post_switch_settings(device_id, switch_id):
     """updates switch title and other settings"""
     device_id = int(device_id)
     switch_id = int(switch_id)
@@ -662,12 +662,15 @@ def post_switch_settings(sensor_id):
     error = None
     check_switch = DB.execute("""
         select login 
-        from devices, devices_switches
-        where device.id = %(device_id)s and 
-            devices_switch.device_type_switch.id = %(switch_id)s""",\
+        from devices join devices_switches 
+            on devices.id = devices_switches.device_id
+        where devices.id = %(device_id)s and 
+            devices_switches.device_type_switch_id = %(switch_id)s""",\
         {'device_id': device_id, 'switch_id': switch_id}, keys=False)
     if check_switch:
-        if check_ == req_data['login']:
+        logging.debug('check_switch')
+        logging.debug(check_switch)
+        if check_switch == req_data['login']:
             DB.param_update('devices_switches',\
                 {'device_id': device_id, 'device_type_switch_id': switch_id},\
                 {'title': req_data['title'],\
@@ -701,12 +704,26 @@ def get_sensor_info(sensor_id):
 
 @APP.route('/api/sensor/data', methods=['POST'])
 def get_sensor_data():
-    """returns sensors data for period in json"""
+    """returns sensor's data for period in json"""
     req_data = request.get_json()
     data = DB.execute("""
         select to_char(tstamp, 'YYYY-MM-DD HH24:MI:SS') as tstamp,  value
             from sensors_data 
             where sensor_id = %(sensor_id)s and
+                tstamp between %(begin)s and %(end)s
+            order by tstamp
+        """, req_data, keys=False)
+    return jsonify(data)
+
+@APP.route('/api/switch/state', methods=['POST'])
+def get_switch_state():
+    """returns switch's state for period in json"""
+    req_data = request.get_json()
+    data = DB.execute("""
+        select to_char(tstamp, 'YYYY-MM-DD HH24:MI:SS') as tstamp,  state
+            from devices_switches_state
+            where device_id = %(device_id)s and 
+                device_type_switch_id = %(device_type_switch_id)s and
                 tstamp between %(begin)s and %(end)s
             order by tstamp
         """, req_data, keys=False)
