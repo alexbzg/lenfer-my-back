@@ -156,6 +156,7 @@ def device_updates():
         select device_schedules.hash as schedule_hash, 
             device_schedules.id as schedule_id, 
             devices_types.schedule_params,
+            device_schedules.params as schedule_settings,
             devices.props as props_values,
             devices_types.props as props_headers
         from devices join devices_types
@@ -183,19 +184,11 @@ def device_updates():
                     if i != j]):
 
                 schedule = {
-                    'params': list(device_data['schedule_params']),\
-                    'items': [],\
+                    'params_list': list(device_data['schedule_params']),\
+                    'params': device_data['schedule_settings'],
+                    'items': schedule_items(device_data['schedule_id']),\
                     'hash': device_data['schedule_hash'],\
                     'start': schedule_start}
-                for item in schedule_items(device_data['schedule_id']):
-                    schedule_item = [None]*len(schedule['params'])
-                    for param, value in item['params'].items():
-                        param_entry = None
-                        if device_data['schedule_params'][param]['type'] == 'float_delta':
-                            param_entry = [float(value['value']), float(value['delta'])]
-                        param_idx = schedule['params'].index(param)
-                        schedule_item[param_idx] = param_entry
-                    schedule['items'].append(schedule_item)
 
                 update_data['schedule'] = schedule
 
@@ -483,7 +476,8 @@ def get_schedule_data(schedule_id):
     schedule_id = int(schedule_id)
     schedule_data = DB.execute("""
         select device_schedules.id, device_type_id as device_type_id, 
-            device_schedules.title, devices_types.title as device_type_title
+            device_schedules.title, devices_types.title as device_type_title,
+            device_schedule.params
             from device_schedules join devices_types 
                 on device_type_id = devices_types.id
             where device_schedules.id = %(schedule_id)s
@@ -530,7 +524,7 @@ def post_schedule_data(schedule_id):
     req_data['hash'] = hashlib.md5(json.dumps(req_data, sort_keys=True).encode('utf-8')).hexdigest()
     if schedule_id == 'new':
         schedule = DB.get_object('device_schedules',\
-            splice_params(req_data, 'login', 'title', 'device_type_id', 'hash'),\
+            splice_params(req_data, 'login', 'title', 'device_type_id', 'hash', 'params'),\
             create=True)
         if schedule:
             schedule_id = schedule['id']
@@ -546,7 +540,7 @@ def post_schedule_data(schedule_id):
             if check_schedule == req_data['login']:
                 DB.param_update('device_schedules',\
                     {'id': schedule_id},\
-                    splice_params(req_data, 'title', 'device_type_id', 'hash'))
+                    splice_params(req_data, 'title', 'device_type_id', 'hash', 'params'))
                 DB.execute("""
                     delete from device_schedule_items
                     where schedule_id = %(schedule_id)s

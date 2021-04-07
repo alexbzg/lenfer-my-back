@@ -56,7 +56,8 @@ CREATE TABLE public.device_schedules (
     login character varying(16),
     title character varying(64),
     device_type_id integer NOT NULL,
-    hash character varying(64)
+    hash character varying(64),
+    params jsonb
 );
 
 
@@ -249,11 +250,10 @@ ALTER TABLE public.devices_switches OWNER TO postgres;
 --
 
 CREATE TABLE public.devices_switches_state (
-    tstamp timestamp without time zone DEFAULT now() NOT NULL,
+    tstamp timestamp without time zone NOT NULL,
     device_id integer NOT NULL,
     device_type_switch_id smallint NOT NULL,
-    state boolean NOT NULL,
-    CONSTRAINT devices_switches_state_tstamp_check CHECK ((tstamp < (now() + '1 day'::interval)))
+    state boolean NOT NULL
 );
 
 
@@ -474,6 +474,14 @@ ALTER TABLE ONLY public.devices_switches_state
 
 
 --
+-- Name: devices_switches_state devices_switches_state_tstamp_check; Type: CHECK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE public.devices_switches_state
+    ADD CONSTRAINT devices_switches_state_tstamp_check CHECK ((tstamp < (now() + '1 day'::interval))) NOT VALID;
+
+
+--
 -- Name: devices_types devices_types_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -677,13 +685,6 @@ GRANT SELECT,INSERT,DELETE,TRUNCATE,UPDATE ON TABLE public.devices_log TO "www-g
 --
 
 GRANT ALL ON SEQUENCE public.devices_log_id_seq TO "www-group";
-
-
---
--- Name: TABLE devices_switches; Type: ACL; Schema: public; Owner: postgres
---
-
-GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,UPDATE ON TABLE public.devices_switches TO "www-group";
 
 
 --
