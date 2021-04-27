@@ -184,9 +184,9 @@ def device_updates():
                     if i != j]):
 
                 schedule = {
-                    'params_list': list(device_data['schedule_params']),\
+                    'params_list': [item['id'] for item in device_data['schedule_params']],\
                     'params': device_data['schedule_settings'],
-                    'items': schedule_items(device_data['schedule_id']),\
+                    'items': [item['params'] for item in schedule_items(device_data['schedule_id'])],\
                     'hash': device_data['schedule_hash'],\
                     'start': schedule_start}
 
@@ -427,7 +427,7 @@ def get_device_info(device_id):
 		select * from
 		(select sensors.id, sensors.is_master, sensor_type as type, device_type_sensor_id,
 					sensors.title as title, device_type_sensors.title as default_title,
-					sensors.enabled
+					sensors.enabled, sensors.correction
 				from sensors join device_type_sensors on
 						device_type_sensors.id = sensors.device_type_sensor_id
 						where device_id = %(device_id)s) as sensors
@@ -477,7 +477,7 @@ def get_schedule_data(schedule_id):
     schedule_data = DB.execute("""
         select device_schedules.id, device_type_id as device_type_id, 
             device_schedules.title, devices_types.title as device_type_title,
-            device_schedule.params
+            device_schedules.params
             from device_schedules join devices_types 
                 on device_type_id = devices_types.id
             where device_schedules.id = %(schedule_id)s
@@ -636,6 +636,7 @@ def post_sensor_settings(sensor_id):
                 {'id': sensor_id},\
                 {'title': req_data['title'],\
                     'enabled': req_data['enabled'],\
+                    'correction': req_data['correction'],
                     'is_master': req_data['is_master']})
         else:
             error = 'Датчик зарегистрирован другим пользователем.'
@@ -687,7 +688,7 @@ def get_sensor_info(sensor_id):
     sensor_data = DB.execute("""
         select sensors.title as sensor_title, 
                 device_type_sensors.title as device_type_title,
-                sensor_type
+                sensor_type, correction
             from sensors join device_type_sensors
                 on device_type_sensor_id = device_type_sensors.id
             where sensors.id = %(sensor_id)s

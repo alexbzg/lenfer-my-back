@@ -30,6 +30,26 @@ CREATE EXTENSION IF NOT EXISTS plpgsql WITH SCHEMA pg_catalog;
 COMMENT ON EXTENSION plpgsql IS 'PL/pgSQL procedural language';
 
 
+--
+-- Name: tf_sensors_data_bi(); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.tf_sensors_data_bi() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$declare
+	correction numeric;
+begin
+	select sensors.correction from sensors where id = new.sensor_id into correction;
+	if found then
+		new.value = new.value + correction;
+	end if;
+	return new;
+end;
+	$$;
+
+
+ALTER FUNCTION public.tf_sensors_data_bi() OWNER TO postgres;
+
 SET default_tablespace = '';
 
 SET default_with_oids = false;
@@ -307,7 +327,8 @@ CREATE TABLE public.sensors (
     title character varying(64),
     device_id integer NOT NULL,
     is_master boolean DEFAULT false,
-    enabled boolean DEFAULT true
+    enabled boolean DEFAULT true,
+    correction numeric(8,2)
 );
 
 
@@ -526,6 +547,13 @@ ALTER TABLE ONLY public.users
 --
 
 CREATE INDEX devices_schedules_fkey ON public.devices USING btree (schedule_id);
+
+
+--
+-- Name: sensors_data tr_sensor_data_bi; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE TRIGGER tr_sensor_data_bi BEFORE INSERT ON public.sensors_data FOR EACH ROW EXECUTE PROCEDURE public.tf_sensors_data_bi();
 
 
 --
