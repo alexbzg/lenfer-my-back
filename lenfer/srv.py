@@ -701,11 +701,24 @@ def get_sensor_info(sensor_id):
 def get_sensor_data():
     """returns sensor's data for period in json"""
     req_data = request.get_json()
+
+    device_data = DB.execute("""
+        select rtc, timezone
+            from sensors join devices on sensors.device_id = devices.id
+                join devices_types on devices.device_type_id = devices_types.id
+            where sensors.id = %(sensor_id)s
+    """, req_data, keys=False)
+    req_data['timezone_ts'] = device_data['timezone'] if device_data['rtc']  else\
+        CONF['server']['timezone']
+    req_data['timezone_dev'] =  device_data['timezone']
+
     data = DB.execute("""
-        select to_char(tstamp, 'YYYY-MM-DD HH24:MI:SS') as tstamp,  value
+        select to_char(tstamp at time zone %(timezone_dev)s, 'YYYY-MM-DD HH24:MI:SS') as tstamp,  value
             from sensors_data 
             where sensor_id = %(sensor_id)s and
-                tstamp between %(begin)s and %(end)s
+                tstamp at time zone %(timezone_ts)s 
+                    between (%(begin)s at time zone %(timezone)s) and 
+                        (%(end)s at time zone %(timezone)s)
             order by tstamp
         """, req_data, keys=False)
     return jsonify(data)
@@ -714,12 +727,24 @@ def get_sensor_data():
 def get_switch_state():
     """returns switch's state for period in json"""
     req_data = request.get_json()
+
+    device_data = DB.execute("""
+        select rtc, timezone
+            from devices join devices_types on devices.device_type_id = devices_types.id
+            where devices.id = %(device_id)s
+    """, req_data, keys=False)
+    req_data['timezone_ts'] = device_data['timezone'] if device_data['rtc']  else\
+        CONF['server']['timezone']
+    req_data['timezone_dev'] =  device_data['timezone']
+
     data = DB.execute("""
-        select to_char(tstamp, 'YYYY-MM-DD HH24:MI:SS') as tstamp,  state
+        select to_char(tstamp at time zone %(timezone_dev)s, 'YYYY-MM-DD HH24:MI:SS') as tstamp,  state
             from devices_switches_state
             where device_id = %(device_id)s and 
                 device_type_switch_id = %(device_type_switch_id)s and
-                tstamp between %(begin)s and %(end)s
+                tstamp at time zone %(timezone_ts)s 
+                    between (%(begin)s at time zone %(timezone)s) and 
+                        (%(end)s at time zone %(timezone)s)
             order by tstamp
         """, req_data, keys=False)
     return jsonify(data)
