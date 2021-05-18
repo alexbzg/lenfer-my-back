@@ -413,7 +413,7 @@ def get_device_info(device_id):
         select device_type_id as device_type_id, 
             devices_types.title as device_type,
             devices.title as title, 
-            schedule_id,
+            schedule_id, timezone,
             devices_types.props as props_titles,
             devices.props as props_values
             from devices join devices_types 
@@ -609,6 +609,8 @@ def post_device_props(device_id):
                     'schedule_id': req_data['schedule_id']\
                         if 'schedule_id' in req_data else None,\
                     'props': json.dumps(req_data['props'])}
+                if 'timezone' in req_data and req_data['timezone']:
+                    upd_params['timezone'] = req_data['timezone']
             DB.param_update('devices', {'id': device_id}, upd_params)
         else:
             error = 'Устройство зарегистрировано другим пользователем.'
