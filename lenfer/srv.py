@@ -197,8 +197,11 @@ def device_updates():
 
     if 'props' in req_data:
         props_dict = props_list_to_dict(device_data['props_headers'], device_data['props_values'])
+        logging.debug('props_dict')
+        logging.debug(props_dict)
         update_props = [prop['id'] for prop in device_data['props_headers']
                         if 'device_updates' in prop and prop['device_updates']]
+
         srv_props = {prop: prop_value for prop, prop_value in props_dict.items()
                      if prop in update_props}
         if data_hash(req_data['props']) != data_hash(srv_props):
