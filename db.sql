@@ -39,7 +39,7 @@ CREATE FUNCTION public.tf_sensors_data_bi() RETURNS trigger
     AS $$declare
 	correction numeric;
 begin
-	select sensors.correction from sensors where id = new.sensor_id into correction;
+	select sensors.correction from sensors where id = new.sensor_id and sensors.correction is not null into correction;
 	if found then
 		new.value = new.value + correction;
 	end if;
@@ -147,7 +147,8 @@ ALTER SEQUENCE public.device_type_sensors_id_seq OWNED BY public.device_type_sen
 CREATE TABLE public.device_type_switches (
     id smallint NOT NULL,
     device_type_id smallint NOT NULL,
-    title character varying(64) NOT NULL
+    title character varying(64) NOT NULL,
+    type character varying(16)
 );
 
 
@@ -187,7 +188,6 @@ CREATE TABLE public.devices (
     props jsonb,
     schedule_id integer,
     last_contact timestamp without time zone,
-    timezone character varying(64) DEFAULT 'Europe/Moscow'::character varying NOT NULL,
     public_access boolean DEFAULT false NOT NULL
 );
 
@@ -375,7 +375,8 @@ ALTER SEQUENCE public.sensors_id_seq OWNED BY public.sensors.id;
 CREATE TABLE public.users (
     login character varying(16) NOT NULL,
     password character varying(64) NOT NULL,
-    public_id character varying(64)
+    public_id character varying(64),
+    timezone character varying(64) DEFAULT 'Europe/Moscow'::character varying NOT NULL
 );
 
 
@@ -653,6 +654,13 @@ ALTER TABLE ONLY public.sensors
 
 
 --
+-- Name: FUNCTION tf_sensors_data_bi(); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.tf_sensors_data_bi() TO "www-group";
+
+
+--
 -- Name: TABLE device_schedule_items; Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -713,6 +721,13 @@ GRANT SELECT,INSERT,DELETE,TRUNCATE,UPDATE ON TABLE public.devices_log TO "www-g
 --
 
 GRANT ALL ON SEQUENCE public.devices_log_id_seq TO "www-group";
+
+
+--
+-- Name: TABLE devices_switches; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT SELECT,INSERT,REFERENCES,TRIGGER,UPDATE ON TABLE public.devices_switches TO "www-group";
 
 
 --

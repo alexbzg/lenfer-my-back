@@ -135,7 +135,7 @@ def post_user_settings():
     """changes user's settings"""
     req_data = request.get_json()
     if not DB.param_update('users', {'login': req_data['login']},\
-        {'password': req_data['password']}):
+        {'password': req_data['password'], 'timezone': req_data['timezone']}):
         raise Exception('Ошибка сохранения настроек.')
     return ok_response()
 
@@ -416,7 +416,7 @@ def get_device_info(device_id):
         select device_type_id as device_type_id, 
             devices_types.title as device_type,
             devices.title as title, 
-            schedule_id, timezone,
+            schedule_id, 
             devices_types.props as props_titles,
             devices.props as props_values
             from devices join devices_types 
@@ -612,8 +612,6 @@ def post_device_props(device_id):
                     'schedule_id': req_data['schedule_id']\
                         if 'schedule_id' in req_data else None,\
                     'props': json.dumps(req_data['props'])}
-                if 'timezone' in req_data and req_data['timezone']:
-                    upd_params['timezone'] = req_data['timezone']
             DB.param_update('devices', {'id': device_id}, upd_params)
         else:
             error = 'Устройство зарегистрировано другим пользователем.'
@@ -708,10 +706,12 @@ def get_sensor_data():
     req_data = request.get_json()
 
     device_data = DB.execute("""
-        select rtc, timezone
+        select rtc, users.timezone
             from sensors join devices on sensors.device_id = devices.id
-                join devices_types on devices.device_type_id = devices_types.id
+                join devices_types on devices.device_type_id = devices_types.id 
+                join users on users.login = devices.login
             where sensors.id = %(sensor_id)s
+
     """, req_data, keys=False)
     req_data['timezone_ts'] = device_data['timezone'] if device_data['rtc']  else\
         CONF['server']['timezone']
@@ -734,8 +734,9 @@ def get_switch_state():
     req_data = request.get_json()
 
     device_data = DB.execute("""
-        select rtc, timezone
+        select rtc, users.timezone
             from devices join devices_types on devices.device_type_id = devices_types.id
+                join users on users.login = devices.login
             where devices.id = %(device_id)s
     """, req_data, keys=False)
     req_data['timezone_ts'] = device_data['timezone'] if device_data['rtc']  else\
