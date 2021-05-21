@@ -134,8 +134,10 @@ def password_recovery():
 def post_user_settings():
     """changes user's settings"""
     req_data = request.get_json()
-    if not DB.param_update('users', {'login': req_data['login']},\
-        {'password': req_data['password'], 'timezone': req_data['timezone']}):
+    upd_params = {'timezone': req_data['timezone']}
+    if req_data['password']:
+        upd_params['password'] = req_data['password']
+    if not DB.param_update('users', {'login': req_data['login']}, upd_params):
         raise Exception('Ошибка сохранения настроек.')
     return ok_response()
 
@@ -204,8 +206,23 @@ def device_updates():
 
         srv_props = {prop: prop_value for prop, prop_value in props_dict.items()
                      if prop in update_props}
+        sensors = DB.execute("""
+            select device_type_sensor_id as id, enabled
+            from sensors
+            where device_id =%(device_id)s
+            """, req_data, keys=False)
+        srv_props['sensors'] = {row['id']: row['enabled'] for row in sensors} if sensors else {}
+
+        switches = DB.execute("""
+            select device_type_switch_id as id, enabled
+            from devices_switches
+            where device_id =%(device_id)s
+            """, req_data, keys=False)
+        srv_props['switches'] = {row['id']: row['enabled'] for row in switches} if switches else {}
+
         if data_hash(req_data['props']) != data_hash(srv_props):
             update_data['props'] = srv_props
+
 
     return jsonify(update_data)
 
@@ -715,7 +732,7 @@ def get_sensor_data():
     """, req_data, keys=False)
     req_data['timezone_ts'] = device_data['timezone'] if device_data['rtc']  else\
         CONF['server']['timezone']
-    req_data['timezone_dev'] =  device_data['timezone']
+    req_data['timezone_dev'] = device_data['timezone']
 
     data = DB.execute("""
         select to_char(tstamp at time zone %(timezone_dev)s, 'YYYY-MM-DD HH24:MI:SS') as tstamp,  value
@@ -741,7 +758,7 @@ def get_switch_state():
     """, req_data, keys=False)
     req_data['timezone_ts'] = device_data['timezone'] if device_data['rtc']  else\
         CONF['server']['timezone']
-    req_data['timezone_dev'] =  device_data['timezone']
+    req_data['timezone_dev'] = device_data['timezone']
 
     data = DB.execute("""
         select to_char(tstamp at time zone %(timezone_dev)s, 'YYYY-MM-DD HH24:MI:SS') as tstamp,  state
