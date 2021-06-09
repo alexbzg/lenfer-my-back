@@ -442,6 +442,7 @@ def get_device_info(device_id):
         """, {'device_id': device_id}, keys=False)
     if not device_data:
         return bad_request('Устройство не найдено. Device not found.')
+    timezone_ts, timezone_dev = get_timezone(device_id=device_id)
     device_data['hash'] = HASHIDS.encode(device_id)
     device_data['sensors'] = DB.execute("""
 		select * from
@@ -452,14 +453,15 @@ def get_device_info(device_id):
 						device_type_sensors.id = sensors.device_type_sensor_id
 						where device_id = %(device_id)s) as sensors
 					left join lateral (select value,
-						to_char(tstamp, 'YYYY-MM-DD HH24:MI:SS') as tstamp
+						to_char(tstamp::timestamp at time zone %(timezone_ts)s 
+                            at time zone %(timezone_dev)s, 'YYYY-MM-DD HH24:MI:SS') as tstamp
 						from sensors_data
 							where sensor_id = sensors.id
 						order by tstamp desc
 						limit 1) as last_data 
 						on true
         order by device_type_sensor_id
-        """, {'device_id': device_id}, keys=False)
+        """, {'device_id': device_id, 'timezone_ts': timezone_ts, 'timezone_dev': timezone_dev}, keys=False)
     device_data['switches'] = DB.execute("""
 		select * from
 		(select device_type_switch_id as id,
@@ -717,30 +719,37 @@ def get_sensor_info(sensor_id):
         return bad_request('Сенсор не найден. Sensor not found.')
     return jsonify(sensor_data)
 
-@APP.route('/api/sensor/data', methods=['POST'])
-def get_sensor_data():
-    """returns sensor's data for period in json"""
-    req_data = request.get_json()
-
+def get_timezone(device_id=None, sensor_id=None):
     device_data = DB.execute("""
         select rtc, users.timezone
             from sensors join devices on sensors.device_id = devices.id
                 join devices_types on devices.device_type_id = devices_types.id 
                 join users on users.login = devices.login
-            where sensors.id = %(sensor_id)s
+            where (%(sensor_id)s is null or sensors.id = %(sensor_id)s) and
+                (%(device_id)s is null or devices.id = %(device_id)s)
+            limit 1
 
-    """, req_data, keys=False)
-    req_data['timezone_ts'] = device_data['timezone'] if device_data['rtc']  else\
+    """, {'sensor_id': sensor_id, 'device_id': device_id}, keys=False)
+    timezone_ts = device_data['timezone'] if device_data['rtc']  else\
         CONF['server']['timezone']
-    req_data['timezone_dev'] = device_data['timezone']
+    timezone_dev = device_data['timezone']
+    return (timezone_ts, timezone_dev)
+
+@APP.route('/api/sensor/data', methods=['POST'])
+def get_sensor_data():
+    """returns sensor's data for period in json"""
+    req_data = request.get_json()
+
+    req_data['timezone_ts'], req_data['timezone_dev'] = get_timezone(sensor_id=req_data['sensor_id'])
 
     data = DB.execute("""
-        select to_char(tstamp at time zone %(timezone_dev)s, 'YYYY-MM-DD HH24:MI:SS') as tstamp,  value
-            from sensors_data 
+        select to_char(tstamp::timestamp at time zone %(timezone_ts)s at time zone %(timezone_dev)s,
+            'YYYY-MM-DD HH24:MI:SS') as tstamp, value
+        from sensors_data
             where sensor_id = %(sensor_id)s and
-                tstamp at time zone %(timezone_ts)s 
-                    between (%(begin)s at time zone %(timezone)s) and 
-                        (%(end)s at time zone %(timezone)s)
+                tstamp 
+                    between (%(begin)s::timestamp at time zone %(timezone)s at time zone %(timezone_ts)s) and 
+                        (%(end)s::timestamp at time zone %(timezone)s at time zone %(timezone_ts)s)
             order by tstamp
         """, req_data, keys=False)
     return jsonify(data)
