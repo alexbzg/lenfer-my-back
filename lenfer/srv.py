@@ -722,13 +722,12 @@ def get_sensor_info(sensor_id):
 def get_timezones(device_id=None, sensor_id=None):
     device_data = DB.execute("""
         select rtc, users.timezone
-            from sensors join devices on sensors.device_id = devices.id
+            from devices left join sensors on sensors.device_id = devices.id
                 join devices_types on devices.device_type_id = devices_types.id 
                 join users on users.login = devices.login
             where (%(sensor_id)s is null or sensors.id = %(sensor_id)s) and
                 (%(device_id)s is null or devices.id = %(device_id)s)
             limit 1
-
     """, {'sensor_id': sensor_id, 'device_id': device_id}, keys=False)
     timezone_ts = device_data['timezone'] if device_data['rtc']  else\
         CONF['server']['timezone']
