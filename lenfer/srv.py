@@ -366,7 +366,7 @@ def send_devices_status(login=None, public_id=None):
     {id: timestamp}"""
     sql = """
         select devices.id, 
-            to_char(last_contact, 'YYYY-MM-DD HH24:MI:SS') as last_tstamp
+            last_contact::timestamptz as last_tstamp
             from devices """
     sql += """join users 
                 on devices.login = users.login
@@ -442,7 +442,7 @@ def get_device_info(device_id):
         """, {'device_id': device_id}, keys=False)
     if not device_data:
         return bad_request('Устройство не найдено. Device not found.')
-    timezone_ts, timezone_dev = get_timezone(device_id=device_id)
+    timezone_ts, timezone_dev, timezone_srv = get_timezones(device_id=device_id)
     device_data['hash'] = HASHIDS.encode(device_id)
     device_data['sensors'] = DB.execute("""
 		select * from
@@ -719,7 +719,7 @@ def get_sensor_info(sensor_id):
         return bad_request('Сенсор не найден. Sensor not found.')
     return jsonify(sensor_data)
 
-def get_timezone(device_id=None, sensor_id=None):
+def get_timezones(device_id=None, sensor_id=None):
     device_data = DB.execute("""
         select rtc, users.timezone
             from sensors join devices on sensors.device_id = devices.id
@@ -733,14 +733,15 @@ def get_timezone(device_id=None, sensor_id=None):
     timezone_ts = device_data['timezone'] if device_data['rtc']  else\
         CONF['server']['timezone']
     timezone_dev = device_data['timezone']
-    return (timezone_ts, timezone_dev)
+    return (timezone_ts, timezone_dev, CONF['server']['timezone'])
 
 @APP.route('/api/sensor/data', methods=['POST'])
 def get_sensor_data():
     """returns sensor's data for period in json"""
     req_data = request.get_json()
 
-    req_data['timezone_ts'], req_data['timezone_dev'] = get_timezone(sensor_id=req_data['sensor_id'])
+    req_data['timezone_ts'], req_data['timezone_dev'], req_data['timezone_srv'] =\
+        get_timezones(sensor_id=req_data['sensor_id'])
 
     data = DB.execute("""
         select to_char(tstamp::timestamp at time zone %(timezone_ts)s at time zone %(timezone_dev)s,
@@ -748,8 +749,10 @@ def get_sensor_data():
         from sensors_data
             where sensor_id = %(sensor_id)s and
                 tstamp 
-                    between (%(begin)s::timestamp at time zone %(timezone)s at time zone %(timezone_ts)s) and 
-                        (%(end)s::timestamp at time zone %(timezone)s at time zone %(timezone_ts)s)
+                    between 
+                        ((now() - interval %(interval)s)::timestamp at time zone %(timezone_srv)s 
+                            at time zone %(timezone_ts)s) and 
+                        (now()::timestamp at time zone %(timezone_srv)s at time zone %(timezone_ts)s)
             order by tstamp
         """, req_data, keys=False)
     return jsonify(data)
@@ -759,24 +762,19 @@ def get_switch_state():
     """returns switch's state for period in json"""
     req_data = request.get_json()
 
-    device_data = DB.execute("""
-        select rtc, users.timezone
-            from devices join devices_types on devices.device_type_id = devices_types.id
-                join users on users.login = devices.login
-            where devices.id = %(device_id)s
-    """, req_data, keys=False)
-    req_data['timezone_ts'] = device_data['timezone'] if device_data['rtc']  else\
-        CONF['server']['timezone']
-    req_data['timezone_dev'] = device_data['timezone']
+    req_data['timezone_ts'], req_data['timezone_dev'], req_data['timezone_srv'] =\
+        get_timezones(device_id=req_data['device_id'])
 
     data = DB.execute("""
-        select to_char(tstamp at time zone %(timezone_dev)s, 'YYYY-MM-DD HH24:MI:SS') as tstamp,  state
+        select to_char(tstamp::timestamp at time zone %(timezone_ts)s at time zone %(timezone_dev)s,
+            'YYYY-MM-DD HH24:MI:SS') as tstamp, state
             from devices_switches_state
             where device_id = %(device_id)s and 
                 device_type_switch_id = %(device_type_switch_id)s and
-                tstamp at time zone %(timezone_ts)s 
-                    between (%(begin)s at time zone %(timezone)s) and 
-                        (%(end)s at time zone %(timezone)s)
+                    tstamp between 
+                        ((now() - interval %(interval)s)::timestamp at time zone %(timezone_srv)s 
+                            at time zone %(timezone_ts)s) and 
+                        (now()::timestamp at time zone %(timezone_srv)s at time zone %(timezone_ts)s)
             order by tstamp
         """, req_data, keys=False)
     return jsonify(data)
