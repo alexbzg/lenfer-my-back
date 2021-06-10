@@ -29,7 +29,7 @@ logging.debug('starting in debug mode')
 
 DB = DBConn(CONF.items('db'))
 DB.connect()
-DB.verbose = True
+DB.verbose = False
 APP.db = DB
 
 def _create_public_id():
@@ -294,22 +294,37 @@ def post_devices_log():
         DB.get_object('devices_log', entry, create=True)
     return ok_response()
 
+def get_db_time(timezone):
+    """return db current timestamp at given tz"""
+    return DB.execute("select to_char(now()::timestamp at time zone %(timezone)s, 'DD Mon YYYY HH24:MI:SSOF')",\
+        {'timezone': timezone}, keys=False)
+
 @APP.route('/api/devices_log', methods=['POST'])
 def get_devices_log():
-    """returns device log for period in json"""
+    """returns device log for last 24 hours in json"""
     req_data = request.get_json()
-    data = DB.execute("""
-        select to_char(log_tstamp, 'YYYY-MM-DD HH24:MI:SS') as log_tstamp,
-            to_char(rcvd_tstamp, 'YYYY-MM-DD HH24:MI:SS') as rcvd_tstamp,
+
+    req_data['timezone_ts'], req_data['timezone_dev'], req_data['timezone_srv'] =\
+        get_timezones(device_id=req_data['device_id'])    
+
+    log = DB.execute("""
+        select to_char(log_tstamp::timestamp at time zone %(timezone_ts)s at time zone %(timezone_dev)s, 
+                'YYYY-MM-DD HH24:MI:SS') as log_tstamp,
+            to_char(rcvd_tstamp::timestamp at time zone %(timezone_srv)s at time zone %(timezone_dev)s, 
+                'YYYY-MM-DD HH24:MI:SS') as rcvd_tstamp,
             txt
             from devices_log
             where device_id = %(device_id)s and
-                log_tstamp between %(begin)s and %(end)s
+                log_tstamp 
+                    between 
+                        ((now() - interval '24 hours')::timestamp at time zone %(timezone_srv)s 
+                            at time zone %(timezone_ts)s) and 
+                        (now()::timestamp at time zone %(timezone_srv)s at time zone %(timezone_ts)s)
             order by log_tstamp desc
         """, req_data, keys=False)
-    if isinstance(data, dict):
-        data = [data,]
-    return jsonify(data)
+    if isinstance(log, dict):
+        log = [log,]
+    return jsonify({'log': log, 'device_timestamp': get_db_time(req_data['timezone_dev'])})
 
 @APP.route('/api/users_device/public/<public_id>', methods=['GET'])
 def get_users_devices_public(public_id):
@@ -366,7 +381,7 @@ def send_devices_status(login=None, public_id=None):
     {id: timestamp}"""
     sql = """
         select devices.id, 
-            last_contact::timestamptz as last_tstamp
+            to_char(last_contact::timestamptz, 'DD Mon YYYY HH24:MI:SSOF') as last_tstamp
             from devices """
     sql += """join users 
                 on devices.login = users.login
@@ -442,7 +457,7 @@ def get_device_info(device_id):
         """, {'device_id': device_id}, keys=False)
     if not device_data:
         return bad_request('Устройство не найдено. Device not found.')
-    timezone_ts, timezone_dev, timezone_srv = get_timezones(device_id=device_id)
+    timezone_ts, timezone_dev, _ = get_timezones(device_id=device_id)
     device_data['hash'] = HASHIDS.encode(device_id)
     device_data['sensors'] = DB.execute("""
 		select * from
@@ -700,8 +715,6 @@ def post_switch_settings(device_id, switch_id):
         return bad_request(error)
     else:
         return ok_response()
-
-
 
 @APP.route('/api/sensor/<sensor_id>', methods=['GET'])
 def get_sensor_info(sensor_id):
