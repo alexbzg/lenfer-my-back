@@ -13,7 +13,7 @@ from db import DBConn
 
 PARSER = argparse.ArgumentParser(description="lenfer device creator")
 PARSER.add_argument('type')
-PARSER.add_argument('user')
+PARSER.add_argument('user', nargs='?')
 ARGS = PARSER.parse_args()
 DB = DBConn(CONF.items('db'))
 DB.connect()
@@ -38,6 +38,13 @@ DB.execute("""insert into sensors (device_type_sensor_id, device_id, is_master)
     select id, %(id)s, is_master
     from device_type_sensors
     where device_type_id = %(device_type_id)s""", DEVICE_DB_DATA)
+DB.execute("""insert into devices_switches (device_id, device_type_switch_id)
+    select %(id)s, id
+    from device_type_switches
+    where device_type_id = (select device_type_id 
+        from devices
+        where devices.id = %(id)s)""", DEVICE_DB_DATA)
+
 DEVICE_DATA = {
     'id': DEVICE_DB_DATA['id'],
     'token': create_token({'device_id': DEVICE_DB_DATA['id']}, SECRET),
