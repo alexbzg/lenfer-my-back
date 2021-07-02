@@ -472,7 +472,7 @@ def get_device_info(device_id):
                             at time zone %(timezone_dev)s, 'YYYY-MM-DD HH24:MI:SS') as tstamp
 						from sensors_data
 							where sensor_id = sensors.id
-						order by tstamp desc
+						order by sensors_data.tstamp desc
 						limit 1) as last_data 
 						on true
         order by device_type_sensor_id
@@ -490,7 +490,7 @@ def get_device_info(device_id):
 						from devices_switches_state
 							where devices_switches_state.device_id = %(device_id)s
                                 and devices_switches_state.device_type_switch_id = switches.id
-						order by tstamp desc
+						order by devices_switches_state.tstamp desc
 						limit 1) as last_data 
 						on true
         order by id
