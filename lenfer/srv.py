@@ -483,6 +483,7 @@ def get_device_info(device_id):
         order by device_type_sensor_id
         """, {'device_id': device_id, 'timezone_ts': timezone_ts, 'timezone_dev': timezone_dev},\
             keys=False)
+
     device_data['switches'] = DB.execute("""
 		select * from
 		(select device_type_switch_id as id,
@@ -501,6 +502,10 @@ def get_device_info(device_id):
 						on true
         order by id
         """, {'device_id': device_id}, keys=False)
+
+    for data_type in ('sensors', 'switches'):
+        if isinstance(device_data[data_type], dict):
+            device_data[data_type] = [device_data[data_type],]
 
     return jsonify(device_data)
 

@@ -188,7 +188,8 @@ CREATE TABLE public.devices (
     props jsonb,
     schedule_id integer,
     last_contact timestamp without time zone,
-    public_access boolean DEFAULT false NOT NULL
+    public_access boolean DEFAULT false NOT NULL,
+    mode character varying(64)
 );
 
 
@@ -290,7 +291,8 @@ CREATE TABLE public.devices_types (
     schedule_params jsonb,
     rtc boolean DEFAULT true NOT NULL,
     software_type character varying(32),
-    updates boolean DEFAULT true
+    updates boolean DEFAULT true,
+    modes jsonb
 );
 
 
