@@ -116,6 +116,7 @@ Ignore this message if you did not request password change
         'email address'})
 
 def ok_response():
+    """basic http ok response"""
     return jsonify({'message': 'Ok'})
 
 @APP.route('/api/password_recovery', methods=['POST'])
@@ -142,6 +143,7 @@ def post_user_settings():
     return ok_response()
 
 def update_device_last_contact(device_id):
+    """updates db when device was online last time"""
     DB.execute("""
         update devices 
         set last_contact = now()
@@ -157,7 +159,7 @@ def device_updates():
     device_data = DB.execute("""
         select device_schedules.hash as schedule_hash, 
             device_schedules.id as schedule_id, 
-            devices_types.schedule_params,
+            devices_types.schedule_params, mode,
             device_schedules.params as schedule_settings,
             devices.props as props_values,
             devices_types.props as props_headers
@@ -188,7 +190,8 @@ def device_updates():
                 schedule = {
                     'params_list': [item['id'] for item in device_data['schedule_params']],\
                     'params': device_data['schedule_settings'],
-                    'items': [item['params'] for item in schedule_items(device_data['schedule_id'])],\
+                    'items': [item['params']\
+                        for item in schedule_items(device_data['schedule_id'])],\
                     'hash': device_data['schedule_hash'],\
                     'start': schedule_start}
 
@@ -219,6 +222,8 @@ def device_updates():
             where device_id =%(device_id)s
             """, req_data, keys=False)
         srv_props['switches'] = {row['id']: row['enabled'] for row in switches} if switches else {}
+        if device_data['mode']:
+            srv_props['mode'] = device_data['mode']
 
         if data_hash(req_data['props']) != data_hash(srv_props):
             update_data['props'] = srv_props
@@ -296,8 +301,8 @@ def post_devices_log():
 
 def get_db_time(timezone):
     """return db current timestamp at given tz"""
-    return DB.execute("select to_char(now()::timestamp at time zone %(timezone)s, 'DD Mon YYYY HH24:MI:SSOF')",\
-        {'timezone': timezone}, keys=False)
+    return DB.execute("""select to_char(now()::timestamp at time zone %(timezone)s,
+        DD Mon YYYY HH24:MI:SSOF')""", {'timezone': timezone}, keys=False)
 
 @APP.route('/api/devices_log', methods=['POST'])
 def get_devices_log():
@@ -305,7 +310,7 @@ def get_devices_log():
     req_data = request.get_json()
 
     req_data['timezone_ts'], req_data['timezone_dev'], req_data['timezone_srv'] =\
-        get_timezones(device_id=req_data['device_id'])    
+        get_timezones(device_id=req_data['device_id'])
 
     log = DB.execute("""
         select to_char(log_tstamp::timestamp at time zone %(timezone_ts)s at time zone %(timezone_dev)s, 
@@ -332,7 +337,7 @@ def get_users_devices_public(public_id):
     [{id, title, type_id, type_title}]
     by his public_id
     """
-    public_id = public_id.lower()    
+    public_id = public_id.lower()
     devices_data = DB.execute("""
         select devices.id, device_type_id as type_id, 
             devices_types.title as type_title,
@@ -375,19 +380,19 @@ def users_devices():
         device['hash'] = HASHIDS.encode(device['id'])
     return jsonify(devices_data)
 
-def send_devices_status(login=None, public_id=None):
-    """sends json users by login or public_id (public access only) 
+def send_devices_status(user=None, public_id=None):
+    """sends json users by login or public_id (public access only)
     devices last connect timestamp list
     {id: timestamp}"""
     sql = """
         select devices.id, 
             to_char(last_contact::timestamptz, 'DD Mon YYYY HH24:MI:SSOF') as last_tstamp
             from devices """
-    sql += """join users 
+    sql += """join users
                 on devices.login = users.login
             where users.public_id = %(public_id)s and devices.public_access
         """ if public_id else "where devices.login = %(login)s"
-    devices_data = DB.execute(sql, {'public_id': public_id, 'login': login},\
+    devices_data = DB.execute(sql, {'public_id': public_id, 'login': user},\
         keys=True)
     if not devices_data:
         devices_data = {}
@@ -403,7 +408,7 @@ def devices_status_public(public_id):
 def devices_status():
     """returns json logged user's devices last connect timestamp list"""
     req_data = request.get_json()
-    return send_devices_status(login=req_data['login'])
+    return send_devices_status(user=req_data['login'])
 
 @APP.route('/api/users_device_schedules', methods=['POST'])
 @validate(token_schema='auth', login=True)
@@ -448,7 +453,7 @@ def get_device_info(device_id):
         select device_type_id as device_type_id, 
             devices_types.title as device_type,
             devices.title as title, 
-            schedule_id, 
+            schedule_id, mode,
             devices_types.props as props_titles,
             devices.props as props_values
             from devices join devices_types 
@@ -476,7 +481,8 @@ def get_device_info(device_id):
 						limit 1) as last_data 
 						on true
         order by device_type_sensor_id
-        """, {'device_id': device_id, 'timezone_ts': timezone_ts, 'timezone_dev': timezone_dev}, keys=False)
+        """, {'device_id': device_id, 'timezone_ts': timezone_ts, 'timezone_dev': timezone_dev},\
+            keys=False)
     device_data['switches'] = DB.execute("""
 		select * from
 		(select device_type_switch_id as id,
@@ -645,6 +651,7 @@ def post_device_props(device_id):
                 upd_params = {'title': req_data['title'],\
                     'schedule_id': req_data['schedule_id']\
                         if 'schedule_id' in req_data else None,\
+                    'mode': req_data['mode'] if 'mode' in req_data else None,\
                     'props': json.dumps(req_data['props'])}
             DB.param_update('devices', {'id': device_id}, upd_params)
         else:
@@ -673,7 +680,7 @@ def post_sensor_settings(sensor_id):
                 {'id': sensor_id},\
                 {'title': req_data['title'],\
                     'enabled': req_data['enabled'],\
-                    'correction': req_data['correction'],
+                    'correction': req_data['correction'],\
                     'is_master': req_data['is_master']})
         else:
             error = 'Датчик зарегистрирован другим пользователем.'
@@ -733,6 +740,10 @@ def get_sensor_info(sensor_id):
     return jsonify(sensor_data)
 
 def get_timezones(device_id=None, sensor_id=None):
+    """returns tuple of timezones
+    (timezone of timestamp in sensors/switches data table,
+    timezone of device location,
+    default server timezone)"""
     device_data = DB.execute("""
         select rtc, users.timezone
             from devices left join sensors on sensors.device_id = devices.id
@@ -848,6 +859,7 @@ def register_device():
         return ok_response()
 
 def splice_request(*params):
+    """return splice of request's json hash"""
     return splice_params(request.get_json(), *params)
 
 def send_user_data(user_data, create=False):
