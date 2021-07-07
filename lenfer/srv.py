@@ -488,7 +488,7 @@ def get_device_info(device_id):
 		select * from
 		(select device_type_switch_id as id,
 					devices_switches.title as title, device_type_switches.title as default_title,
-					enabled, device_type_switches.type
+					enabled, device_type_switches.type, device_type_switches.modes
 				from devices_switches join device_type_switches on
 						device_type_switches.id = devices_switches.device_type_switch_id
 						where device_id = %(device_id)s) as switches

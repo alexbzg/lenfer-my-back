@@ -148,7 +148,8 @@ CREATE TABLE public.device_type_switches (
     id smallint NOT NULL,
     device_type_id smallint NOT NULL,
     title character varying(64) NOT NULL,
-    type character varying(16)
+    type character varying(16),
+    modes jsonb
 );
 
 
