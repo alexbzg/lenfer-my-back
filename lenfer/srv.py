@@ -13,15 +13,17 @@ from hashids import Hashids
 
 from validator import validate, bad_request
 from db import DBConn, splice_params
-from conf import CONF, APP_NAME, start_logging
+from conf import CONF, APP_NAME, APP_ROOT, start_logging
 from secret import get_secret, create_token
 import send_email
 from hash import data_hash
+from json_utils import load_json
 
 APP = Flask(APP_NAME)
 APP.config.update(CONF['flask'])
 APP.secret_key = get_secret(CONF['files']['secret'])
 HASHIDS = Hashids(salt=APP.secret_key.decode('utf-8'), min_length=6)
+TIMEZONES = load_json(APP_ROOT + '/timezones.json')
 
 with APP.app_context():
     start_logging('srv', CONF['logs']['srv_level'])
@@ -31,6 +33,9 @@ DB = DBConn(CONF.items('db'))
 DB.connect()
 DB.verbose = False
 APP.db = DB
+
+def tz_shift(tzone):
+    return TIMEZONES[tzone] if tzone in TIMEZONES else ''
 
 def _create_public_id():
     user_count = DB.execute('select sum(1) from users;')
@@ -152,7 +157,7 @@ def update_device_last_contact(device_id):
 @APP.route('/api/device_updates', methods=['POST'])
 @validate(request_schema='device_updates', token_schema='device')
 def device_updates():
-    """checks for update of device schedule/elegible props"""
+    """checks for update of device schedule/eligible props"""
     req_data = request.get_json()
     update_device_last_contact(req_data['device_id'])
     update_data = {}
@@ -237,7 +242,8 @@ def props_list_to_dict(headers, values):
         props_list_to_dict(header['items'], item)\
             for item in values[idx]])\
         if 'items' in header else values[idx])\
-        for idx, header in enumerate(headers)}
+        for idx, header in enumerate(headers)\
+        if len(values) > idx}
 
 
 @APP.route('/api/switches_state', methods=['POST'])
@@ -483,7 +489,6 @@ def get_device_info(device_id):
         order by device_type_sensor_id
         """, {'device_id': device_id, 'timezone_ts': timezone_ts, 'timezone_dev': timezone_dev},\
             keys=False)
-
     device_data['switches'] = DB.execute("""
 		select * from
 		(select device_type_switch_id as id,
@@ -503,9 +508,15 @@ def get_device_info(device_id):
         order by id
         """, {'device_id': device_id}, keys=False)
 
+    timezone_dev_shift = tz_shift(timezone_dev)
+
     for data_type in ('sensors', 'switches'):
         if isinstance(device_data[data_type], dict):
             device_data[data_type] = [device_data[data_type],]
+        for row in device_data[data_type]:
+            if row['tstamp']:
+                row['tstamp'] += timezone_dev_shift
+
 
     return jsonify(device_data)
 
@@ -644,15 +655,6 @@ def post_device_props(device_id):
             if 'delete' in req_data and req_data['delete']:
                 upd_params = {'login': None}
             else:
-
-                timers_prop_id = None
-                for index, item in enumerate(check_device['props_headers']):
-                    if item['id'] == 'timers':
-                        timers_prop_id = index
-                        break
-                if timers_prop_id and req_data['props'][timers_prop_id]:
-                    req_data['props'][timers_prop_id].sort(key=lambda item: item[0])
-
                 upd_params = {'title': req_data['title'],\
                     'schedule_id': req_data['schedule_id']\
                         if 'schedule_id' in req_data else None,\
