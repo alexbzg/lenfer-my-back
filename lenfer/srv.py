@@ -513,9 +513,10 @@ def get_device_info(device_id):
     for data_type in ('sensors', 'switches'):
         if isinstance(device_data[data_type], dict):
             device_data[data_type] = [device_data[data_type],]
-        for row in device_data[data_type]:
-            if row['tstamp']:
-                row['tstamp'] += timezone_dev_shift
+        if device_data[data_type]:
+            for row in device_data[data_type]:
+                if row['tstamp']:
+                    row['tstamp'] += timezone_dev_shift
 
 
     return jsonify(device_data)
