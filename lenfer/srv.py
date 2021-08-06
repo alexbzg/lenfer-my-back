@@ -140,7 +140,11 @@ def password_recovery():
 def post_user_settings():
     """changes user's settings"""
     req_data = request.get_json()
-    upd_params = {'timezone': req_data['timezone']}
+    upd_params = {
+        'timezone': req_data['timezone'],
+        'location': '(' + str(req_data['location'][0]) + ', ' + str(req_data['location'][1]) + ')'\
+            if req_data['location'] else None
+    }
     if req_data['password']:
         upd_params['password'] = req_data['password']
     if not DB.param_update('users', {'login': req_data['login']}, upd_params):

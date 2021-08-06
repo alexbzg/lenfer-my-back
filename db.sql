@@ -379,7 +379,8 @@ CREATE TABLE public.users (
     login character varying(16) NOT NULL,
     password character varying(64) NOT NULL,
     public_id character varying(64),
-    timezone character varying(64) DEFAULT 'Europe/Moscow'::character varying NOT NULL
+    timezone character varying(64) DEFAULT 'Europe/Moscow'::character varying NOT NULL,
+    location point
 );
 
 
