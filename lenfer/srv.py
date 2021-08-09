@@ -5,8 +5,10 @@ import logging
 import time
 import json
 import hashlib
-from datetime import datetime
+from datetime import datetime, timedelta
 
+from dateutil import tz
+from suntime import Sun, SunTimeException
 from flask import Flask, request, jsonify
 from werkzeug.exceptions import InternalServerError
 from hashids import Hashids
@@ -522,8 +524,44 @@ def get_device_info(device_id):
                 if row['tstamp']:
                     row['tstamp'] += timezone_dev_shift
 
+    for idx, title in enumerate(device_data['props_titles']):
+        if title['id'] == 'timers':
+            timers = device_data['props_values'][idx]
+            if timers:
+                sun_timers = [timer for timer in timers if timer[2]]
+                if sun_timers:
+                    db_loc = DB.execute("""
+                        select users.location
+                            from devices join users on users.login = devices.login
+                            where devices.id = %(device_id)s
+                    """, {'device_id': device_id}, keys=False)
+                    if db_loc:
+                        location = parse_db_location(db_loc)
+                        sun = Sun(*location)
+                        tz_dev = tz.gettz(timezone_dev)
+                        sunrise, sunset = None, None
+                        try:
+                            sunrise = sun.get_local_sunrise_time(local_time_zone=tz_dev)
+                            sunset = sun.get_local_sunset_time(local_time_zone=tz_dev)
+                        except SunTimeException:
+                            logging.exception('Suntime error', exc_info=True)
+                        day_start = datetime.now(tz=tz_dev).replace(hour=0, minute=0,\
+                            second=0, microsecond=0)
+                        for timer in sun_timers:
+                            sun_time = sunrise if timer[2] == 1 else sunset
+                            if sun_time:
+                                timer_start = (sun_time + timedelta(seconds=timer[0])) - day_start
+                                timer.append(timer_start.total_seconds())
+                for timer in timers:
+                    if len(timer) < 4:
+                        timer.append(timer[0] if timer[2] == 0 else None)
+                timers.sort(key=lambda timer: timer[3])
+
 
     return jsonify(device_data)
+
+def parse_db_location(db_loc):
+    return tuple(float(item) for item in db_loc.strip('()').split(','))
 
 @APP.route('/api/devices_types', methods=['GET'])
 def get_devices_types():
