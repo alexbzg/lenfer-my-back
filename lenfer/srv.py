@@ -84,6 +84,11 @@ def get_user_data():
     """returns user data by token"""
     return send_user_data(splice_request('login'))
 
+@APP.route('/api/user_data/<public_id>', methods=['GET'])
+def get_user_data_public(public_id):
+    """returns user data by token"""
+    return send_user_data({'public_id': public_id}, public=True)
+
 @APP.route('/api/password_recovery_request', methods=['POST'])
 @validate(request_schema='passwordRecoveryRequest', recaptcha_field='recaptcha')
 def password_recovery_request():
@@ -524,40 +529,6 @@ def get_device_info(device_id):
                 if row['tstamp']:
                     row['tstamp'] += timezone_dev_shift
 
-    for idx, title in enumerate(device_data['props_titles']):
-        if title['id'] == 'timers':
-            timers = device_data['props_values'][idx]
-            if timers:
-                sun_timers = [timer for timer in timers if timer[2]]
-                if sun_timers:
-                    db_loc = DB.execute("""
-                        select users.location
-                            from devices join users on users.login = devices.login
-                            where devices.id = %(device_id)s
-                    """, {'device_id': device_id}, keys=False)
-                    if db_loc:
-                        location = parse_db_location(db_loc)
-                        sun = Sun(*location)
-                        tz_dev = tz.gettz(timezone_dev)
-                        sunrise, sunset = None, None
-                        try:
-                            sunrise = sun.get_local_sunrise_time(local_time_zone=tz_dev)
-                            sunset = sun.get_local_sunset_time(local_time_zone=tz_dev)
-                        except SunTimeException:
-                            logging.exception('Suntime error', exc_info=True)
-                        day_start = datetime.now(tz=tz_dev).replace(hour=0, minute=0,\
-                            second=0, microsecond=0)
-                        for timer in sun_timers:
-                            sun_time = sunrise if timer[2] == 1 else sunset
-                            if sun_time:
-                                timer_start = (sun_time + timedelta(seconds=timer[0])) - day_start
-                                timer.append(timer_start.total_seconds())
-                for timer in timers:
-                    if len(timer) < 4:
-                        timer.append(timer[0] if timer[2] == 0 else None)
-                timers.sort(key=lambda timer: timer[3])
-
-
     return jsonify(device_data)
 
 def parse_db_location(db_loc):
@@ -912,13 +883,18 @@ def splice_request(*params):
     """return splice of request's json hash"""
     return splice_params(request.get_json(), *params)
 
-def send_user_data(user_data, create=False):
+def send_user_data(user_data, create=False, public=False):
     """returns user data with auth token as json response"""
     data = DB.get_object('users', user_data, create=create)
     if data:
-        token = _create_token({'login': data['login'], 'type': 'auth'})
+        if data['location']:
+            data['location'] = parse_db_location(data['location'])
         del data['password']
-        data['token'] = token
+        if public:
+            del data['login']
+        else:
+            token = _create_token({'login': data['login'], 'type': 'auth'})
+            data['token'] = token
         return jsonify(data)
     else:
         if create:
