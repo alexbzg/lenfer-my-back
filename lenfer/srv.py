@@ -5,10 +5,8 @@ import logging
 import time
 import json
 import hashlib
-from datetime import datetime, timedelta
+from datetime import datetime
 
-from dateutil import tz
-from suntime import Sun, SunTimeException
 from flask import Flask, request, jsonify
 from werkzeug.exceptions import InternalServerError
 from hashids import Hashids
@@ -38,6 +36,9 @@ APP.db = DB
 
 def tz_shift(tzone):
     return TIMEZONES[tzone] if tzone in TIMEZONES else ''
+
+def tz_shift_int(tzone):
+    return int(TIMEZONES[tzone]) if tzone in TIMEZONES and TIMEZONES[tzone] else 0
 
 def _create_public_id():
     user_count = DB.execute('select sum(1) from users;')
@@ -178,11 +179,14 @@ def device_updates():
             devices_types.schedule_params, mode,
             device_schedules.params as schedule_settings,
             devices.props as props_values,
-            devices_types.props as props_headers
+            devices_types.props as props_headers,
+            users.location, users.timezone
         from devices join devices_types
             on devices.device_type_id = devices_types.id
             left join device_schedules
             on devices.schedule_id = device_schedules.id
+            left join users on
+            devices.login = users.login
         where devices.id = %(device_id)s""", req_data, keys=False)
 
     if 'schedule' in req_data:
@@ -243,6 +247,9 @@ def device_updates():
 
         if data_hash(req_data['props']) != data_hash(srv_props):
             update_data['props'] = srv_props
+
+        srv_props['location'] = parse_db_location(device_data['location']) if device_data['location'] else None
+        srv_props['timezone'] = tz_shift_int(device_data['timezone'])
 
 
     return jsonify(update_data)
