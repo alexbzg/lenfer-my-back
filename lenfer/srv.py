@@ -245,12 +245,15 @@ def device_updates():
         if device_data['mode']:
             srv_props['mode'] = device_data['mode']
 
-        if data_hash(req_data['props']) != data_hash(srv_props):
-            update_data['props'] = srv_props
-
         srv_props['location'] = parse_db_location(device_data['location']) if device_data['location'] else None
         srv_props['timezone'] = tz_shift_int(device_data['timezone'])
 
+        if data_hash(req_data['props']) != data_hash(srv_props):
+            logging.info('device settings')
+            logging.info(json.dumps(req_data['props'], sort_keys=True))
+            logging.info('server settings')
+            logging.info(json.dumps(srv_props, sort_keys=True))
+            update_data['props'] = srv_props
 
     return jsonify(update_data)
 
@@ -326,7 +329,7 @@ def post_devices_log():
 def get_db_time(timezone):
     """return db current timestamp at given tz"""
     return DB.execute("""select to_char(now()::timestamp at time zone %(timezone)s,
-        DD Mon YYYY HH24:MI:SSOF')""", {'timezone': timezone}, keys=False)
+        'DD Mon YYYY HH24:MI:SSOF')""", {'timezone': timezone}, keys=False)
 
 @APP.route('/api/devices_log', methods=['POST'])
 def get_devices_log():
@@ -539,7 +542,7 @@ def get_device_info(device_id):
     return jsonify(device_data)
 
 def parse_db_location(db_loc):
-    return tuple(float(item) for item in db_loc.strip('()').split(','))
+    return tuple(round(float(item), 5) for item in db_loc.strip('()').split(','))
 
 @APP.route('/api/devices_types', methods=['GET'])
 def get_devices_types():
