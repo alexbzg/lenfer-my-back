@@ -113,7 +113,8 @@ CREATE TABLE public.device_type_sensors (
     id integer NOT NULL,
     sensor_type character varying(64) NOT NULL,
     title character varying(64) NOT NULL,
-    is_master boolean DEFAULT false
+    is_master boolean DEFAULT false,
+    modes jsonb
 );
 
 

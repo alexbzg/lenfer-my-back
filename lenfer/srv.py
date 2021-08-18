@@ -495,7 +495,7 @@ def get_device_info(device_id):
 		select * from
 		(select sensors.id, sensors.is_master, sensor_type as type, device_type_sensor_id,
 					sensors.title as title, device_type_sensors.title as default_title,
-					sensors.enabled, sensors.correction
+					sensors.enabled, sensors.correction, device_type_sensors.modes
 				from sensors join device_type_sensors on
 						device_type_sensors.id = sensors.device_type_sensor_id
 						where device_id = %(device_id)s) as sensors
