@@ -392,6 +392,8 @@ def users_devices():
     devices_data = DB.execute("""
         select devices.id, device_type_id as type_id, 
             devices_types.title as type_title,
+            devices_types.props as props_headers,
+            devices.props as props_values,
             schedule_id, public_access,
             devices.title as title
             from devices join devices_types 
