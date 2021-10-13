@@ -8,7 +8,7 @@ import hashlib
 from datetime import datetime
 
 from flask import Flask, request, jsonify
-from werkzeug.exceptions import InternalServerError
+from werkzeug.exceptions import HTTPException
 from hashids import Hashids
 
 from validator import validate, bad_request
@@ -48,20 +48,27 @@ def _create_public_id():
 def _create_token(data):
     return create_token(data, APP.secret_key)
 
-@APP.errorhandler(InternalServerError)
+@APP.errorhandler(Exception)
 def internal_error(exception):
     'Internal server error interceptor; logs exception'
+    if isinstance(exception, HTTPException):
+        return exception
     response = jsonify({'message': 'Server error'})
     response.status_code = 500
     logging.exception(exception)
-    logging.debug('------internal error--------')
-    logging.debug(str(exception))
     return response
 
 @APP.route('/api/test', methods=['GET', 'POST'])
 def test():
     """test if api is up"""
     return "Ok %s" % request.method
+
+@APP.route('/api/test_error', methods=['GET', 'POST'])
+def test_error():
+    """test if api is up"""
+    a = 0 / 0
+    return "Ok"
+
 
 @APP.route('/api/register_user', methods=['POST'])
 @validate(request_schema='login', recaptcha_field='recaptcha')
