@@ -64,6 +64,8 @@ def validate(request_schema=None, token_schema=None, recaptcha_field=None, login
 
     request_validator = _json_validator(CONF['web']['root'] + '/schemas.json')
     token_validator = _json_validator(APP_ROOT + '/token_schemas.json')
+    debug_devices = tuple([int(id) for id in CONF['debug']['devices'].split(' ')])
+    logging.debug('Debug devices: %s' % str(debug_devices))
 
     def wrapper(func):
 
@@ -83,10 +85,11 @@ def validate(request_schema=None, token_schema=None, recaptcha_field=None, login
                 if token_schema:
                     if 'token' in request_data and request_data['token']:
                         token_data = decode_token(request_data['token'])
-                        logging.debug('token deciphered:')
-                        logging.debug(token_data)
-                        logging.debug('current time: ')
-                        logging.debug(time.time())
+                        logging.debug('token deciphered: %s' % token_data)
+                        if ('device_id' in token_data) and (token_data['device_id'] in debug_devices):
+                            logging.debug('device_id: %s' % token_data['device_id'])
+                            logging.debug('request path: %s' % request.path)
+                            logging.debug('request payload: %s' % request_data)
                         validated, error = token_validator(token_data, token_schema)
                         auth_error = False
                         if not validated or\
