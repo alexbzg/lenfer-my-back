@@ -66,9 +66,7 @@ def test():
 @APP.route('/api/test_error', methods=['GET', 'POST'])
 def test_error():
     """test if api is up"""
-    a = 0 / 0
-    return "Ok"
-
+    return jsonify(0 / 0)
 
 @APP.route('/api/register_user', methods=['POST'])
 @validate(request_schema='login', recaptcha_field='recaptcha')
@@ -236,7 +234,7 @@ def device_updates():
                             if 'device_updates' in prop and prop['device_updates']]
 
             srv_props = {prop: prop_value for prop, prop_value in props_dict.items()
-                        if prop in update_props}
+                         if prop in update_props}
             device_data['sensors'] = DB.execute("""
                 select device_type_sensor_id as id, enabled
                 from sensors
@@ -260,6 +258,13 @@ def device_updates():
 
             srv_props['location'] = parse_db_location(device_data['location']) if device_data['location'] else None
             srv_props['timezone'] = tz_shift_int(device_data['timezone'])
+
+            if srv_props.get('deepsleep'):
+                if srv_props['deepsleep'] in (5, 10, 20, 30) or srv_props['deepsleep'] % 60 == 0:
+                    current_minutes = datetime.now().minute
+                    if current_minutes > srv_props['deepsleep']:
+                        current_minutes = current_minutes % srv_props['deepsleep']
+                    srv_props['deepsleep'] -= current_minutes + 1
 
             if data_hash(req_data['props']) != data_hash(srv_props):
                 update_data['props'] = srv_props
