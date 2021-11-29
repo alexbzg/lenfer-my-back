@@ -261,10 +261,15 @@ def device_updates():
 
             if srv_props.get('deepsleep'):
                 if srv_props['deepsleep'] in (5, 10, 20, 30) or srv_props['deepsleep'] % 60 == 0:
+                    #schedule next wake-up at rounded time
                     current_minutes = datetime.now().minute
                     if current_minutes > srv_props['deepsleep']:
                         current_minutes = current_minutes % srv_props['deepsleep']
-                    srv_props['deepsleep'] -= current_minutes + 1
+                    to_wake = srv_props['deepsleep'] - current_minutes - 1
+                    if to_wake < srv_props['deepsleep'] / 5:
+                        srv_props['deepsleep'] += to_wake
+                    else:
+                        srv_props['deepsleep'] = to_wake
 
             if data_hash(req_data['props']) != data_hash(srv_props):
                 update_data['props'] = srv_props
