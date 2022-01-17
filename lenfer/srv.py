@@ -177,110 +177,103 @@ def update_device_last_contact(device_id):
 @validate(request_schema='device_updates', token_schema='device')
 def device_updates():
     """checks for update of device schedule/eligible props"""
-    try:
-        req_data = request.get_json()
-        update_device_last_contact(req_data['device_id'])
-        update_data = {}
-        device_data = DB.execute("""
-            select device_schedules.hash as schedule_hash, 
-                device_schedules.id as schedule_id, 
-                devices_types.schedule_params, mode,
-                device_schedules.params as schedule_settings,
-                devices.props as props_values,
-                devices_types.props as props_headers,
-                users.location, users.timezone
-            from devices join devices_types
-                on devices.device_type_id = devices_types.id
-                left join device_schedules
-                on devices.schedule_id = device_schedules.id
-                left join users on
-                devices.login = users.login
-            where devices.id = %(device_id)s""", req_data, keys=False)
+    req_data = request.get_json()
+    update_device_last_contact(req_data['device_id'])
+    update_data = {}
+    device_data = DB.execute("""
+        select device_schedules.hash as schedule_hash, 
+            device_schedules.id as schedule_id, 
+            devices_types.schedule_params, mode,
+            device_schedules.params as schedule_settings,
+            devices.props as props_values,
+            devices_types.props as props_headers,
+            users.location, users.timezone
+        from devices join devices_types
+            on devices.device_type_id = devices_types.id
+            left join device_schedules
+            on devices.schedule_id = device_schedules.id
+            left join users on
+            devices.login = users.login
+        where devices.id = %(device_id)s""", req_data, keys=False)
 
-        if 'schedule' in req_data:
-            update_data['schedule'] = {'hash': None, 'start': None}
-            if device_data and device_data['schedule_id']:
-                schedule_start = None
-                for idx, prop_header in enumerate(device_data['props_headers']):
-                    if 'schedule_start' in prop_header and prop_header['schedule_start']:
-                        schedule_start = (datetime.strptime(device_data['props_values'][idx],\
-                            "%Y-%m-%dT%H:%M:%S.%fZ").timetuple()\
-                            if device_data['props_values'] and\
-                                len(device_data['props_values']) > idx\
-                            else None)
-                        break
-                if device_data['schedule_hash'] and schedule_start and\
-                    (device_data['schedule_hash'] != req_data['schedule']['hash']) or\
-                    (not req_data['schedule']['start'] or\
-                    [1 for i, j in zip(schedule_start, req_data['schedule']['start'])\
-                        if i != j]):
+    if 'schedule' in req_data:
+        update_data['schedule'] = {'hash': None, 'start': None}
+        if device_data and device_data['schedule_id']:
+            schedule_start = None
+            for idx, prop_header in enumerate(device_data['props_headers']):
+                if 'schedule_start' in prop_header and prop_header['schedule_start']:
+                    schedule_start = (datetime.strptime(device_data['props_values'][idx],\
+                        "%Y-%m-%dT%H:%M:%S.%fZ").timetuple()\
+                        if device_data['props_values'] and\
+                            len(device_data['props_values']) > idx\
+                        else None)
+                    break
+            if device_data['schedule_hash'] and schedule_start and\
+                (device_data['schedule_hash'] != req_data['schedule']['hash']) or\
+                (not req_data['schedule']['start'] or\
+                [1 for i, j in zip(schedule_start, req_data['schedule']['start'])\
+                    if i != j]):
 
-                    schedule = {
-                        'params_list': [item['id'] for item in device_data['schedule_params']],\
-                        'params': device_data['schedule_settings'],
-                        'items': [item['params']\
-                            for item in schedule_items(device_data['schedule_id'])],\
-                        'hash': device_data['schedule_hash'],\
-                        'start': schedule_start}
+                schedule = {
+                    'params_list': [item['id'] for item in device_data['schedule_params']],\
+                    'params': device_data['schedule_settings'],
+                    'items': [item['params']\
+                        for item in schedule_items(device_data['schedule_id'])],\
+                    'hash': device_data['schedule_hash'],\
+                    'start': schedule_start}
 
-                    update_data['schedule'] = schedule
+                update_data['schedule'] = schedule
 
+            else:
+                del update_data['schedule']
+
+    if 'props' in req_data:
+        props_dict = props_list_to_dict(device_data['props_headers'], device_data['props_values'])
+        update_props = [prop['id'] for prop in device_data['props_headers']
+                        if 'device_updates' in prop and prop['device_updates']]
+
+        srv_props = {prop: prop_value for prop, prop_value in props_dict.items()
+                     if prop in update_props}
+        device_data['sensors'] = DB.execute("""
+            select device_type_sensor_id as id, enabled
+            from sensors
+            where device_id =%(device_id)s
+            """, req_data, keys=False)
+        
+        device_data['switches'] = DB.execute("""
+            select device_type_switch_id as id, enabled
+            from devices_switches
+            where device_id =%(device_id)s
+            """, req_data, keys=False)
+
+        for data_type in ('sensors', 'switches'):
+            if isinstance(device_data[data_type], dict):
+                device_data[data_type] = [device_data[data_type],]
+            srv_props[data_type] = {row['id']: row['enabled'] for row in device_data[data_type]}\
+                if device_data[data_type] else {}
+
+        if device_data['mode']:
+            srv_props['mode'] = device_data['mode']
+
+        srv_props['location'] = parse_db_location(device_data['location']) if device_data['location'] else None
+        srv_props['timezone'] = tz_shift_int(device_data['timezone'])
+
+        if srv_props.get('deepsleep'):
+            if srv_props['deepsleep'] in (5, 10, 20, 30) or srv_props['deepsleep'] % 60 == 0:
+                #schedule next wake-up at rounded time
+                current_minutes = datetime.now().minute
+                if current_minutes > srv_props['deepsleep']:
+                    current_minutes = current_minutes % srv_props['deepsleep']
+                to_wake = srv_props['deepsleep'] - current_minutes - 1
+                if to_wake < srv_props['deepsleep'] / 5:
+                    srv_props['deepsleep'] += to_wake
                 else:
-                    del update_data['schedule']
+                    srv_props['deepsleep'] = to_wake
 
-        if 'props' in req_data:
-            props_dict = props_list_to_dict(device_data['props_headers'], device_data['props_values'])
-            update_props = [prop['id'] for prop in device_data['props_headers']
-                            if 'device_updates' in prop and prop['device_updates']]
+        if data_hash(req_data['props']) != data_hash(srv_props):
+            update_data['props'] = srv_props
 
-            srv_props = {prop: prop_value for prop, prop_value in props_dict.items()
-                         if prop in update_props}
-            device_data['sensors'] = DB.execute("""
-                select device_type_sensor_id as id, enabled
-                from sensors
-                where device_id =%(device_id)s
-                """, req_data, keys=False)
-            
-            device_data['switches'] = DB.execute("""
-                select device_type_switch_id as id, enabled
-                from devices_switches
-                where device_id =%(device_id)s
-                """, req_data, keys=False)
-
-            for data_type in ('sensors', 'switches'):
-                if isinstance(device_data[data_type], dict):
-                    device_data[data_type] = [device_data[data_type],]
-                srv_props[data_type] = {row['id']: row['enabled'] for row in device_data[data_type]}\
-                    if device_data[data_type] else {}
-
-            if device_data['mode']:
-                srv_props['mode'] = device_data['mode']
-
-            srv_props['location'] = parse_db_location(device_data['location']) if device_data['location'] else None
-            srv_props['timezone'] = tz_shift_int(device_data['timezone'])
-
-            if srv_props.get('deepsleep'):
-                if srv_props['deepsleep'] in (5, 10, 20, 30) or srv_props['deepsleep'] % 60 == 0:
-                    #schedule next wake-up at rounded time
-                    current_minutes = datetime.now().minute
-                    if current_minutes > srv_props['deepsleep']:
-                        current_minutes = current_minutes % srv_props['deepsleep']
-                    to_wake = srv_props['deepsleep'] - current_minutes - 1
-                    if to_wake < srv_props['deepsleep'] / 5:
-                        srv_props['deepsleep'] += to_wake
-                    else:
-                        srv_props['deepsleep'] = to_wake
-
-            if data_hash(req_data['props']) != data_hash(srv_props):
-                update_data['props'] = srv_props
-
-        return jsonify(update_data)
-    except Exception as exception:
-        response = jsonify({'message': 'Server error'})
-        response.status_code = 500
-        logging.debug('------internal error--------')
-        logging.exception(exception)
-        return response
+    return jsonify(update_data)
 
 def props_list_to_dict(headers, values):
     """converts device properties list from db to dictionary"""
@@ -522,7 +515,8 @@ def get_device_info(device_id):
 		select * from
 		(select sensors.id, sensors.is_master, sensor_type as type, device_type_sensor_id,
 					sensors.title as title, device_type_sensors.title as default_title,
-					sensors.enabled, sensors.correction, device_type_sensors.modes
+					sensors.enabled, sensors.correction, device_type_sensors.modes,
+                    device_type_sensors.sensors_group as group
 				from sensors join device_type_sensors on
 						device_type_sensors.id = sensors.device_type_sensor_id
 						where device_id = %(device_id)s) as sensors

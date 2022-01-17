@@ -114,7 +114,8 @@ CREATE TABLE public.device_type_sensors (
     sensor_type character varying(64) NOT NULL,
     title character varying(64) NOT NULL,
     is_master boolean DEFAULT false,
-    modes jsonb
+    modes jsonb,
+    sensors_group smallint
 );
 
 
@@ -190,6 +191,7 @@ CREATE TABLE public.devices (
     props jsonb,
     schedule_id integer,
     last_contact timestamp without time zone,
+    timezone character varying(64) DEFAULT 'Europe/Moscow'::character varying NOT NULL,
     public_access boolean DEFAULT false NOT NULL,
     mode character varying(64)
 );
@@ -273,10 +275,11 @@ ALTER TABLE public.devices_switches OWNER TO postgres;
 --
 
 CREATE TABLE public.devices_switches_state (
-    tstamp timestamp without time zone NOT NULL,
+    tstamp timestamp without time zone DEFAULT now() NOT NULL,
     device_id integer NOT NULL,
     device_type_switch_id smallint NOT NULL,
-    state boolean NOT NULL
+    state boolean NOT NULL,
+    CONSTRAINT devices_switches_state_tstamp_check CHECK ((tstamp < (now() + '1 day'::interval)))
 );
 
 
@@ -332,7 +335,8 @@ CREATE TABLE public.sensors (
     device_id integer NOT NULL,
     is_master boolean DEFAULT false,
     enabled boolean DEFAULT true,
-    correction numeric(8,2)
+    correction numeric(8,2),
+    sensor_order smallint
 );
 
 
@@ -377,7 +381,7 @@ ALTER SEQUENCE public.sensors_id_seq OWNED BY public.sensors.id;
 --
 
 CREATE TABLE public.users (
-    login character varying(16) NOT NULL,
+    login character varying(32) NOT NULL,
     password character varying(64) NOT NULL,
     public_id character varying(64),
     timezone character varying(64) DEFAULT 'Europe/Moscow'::character varying NOT NULL,
@@ -498,14 +502,6 @@ ALTER TABLE ONLY public.devices_switches
 
 ALTER TABLE ONLY public.devices_switches_state
     ADD CONSTRAINT devices_switches_state_pkey PRIMARY KEY (tstamp, device_id, device_type_switch_id);
-
-
---
--- Name: devices_switches_state devices_switches_state_tstamp_check; Type: CHECK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE public.devices_switches_state
-    ADD CONSTRAINT devices_switches_state_tstamp_check CHECK ((tstamp < (now() + '1 day'::interval))) NOT VALID;
 
 
 --
@@ -732,7 +728,7 @@ GRANT ALL ON SEQUENCE public.devices_log_id_seq TO "www-group";
 -- Name: TABLE devices_switches; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT,INSERT,REFERENCES,TRIGGER,UPDATE ON TABLE public.devices_switches TO "www-group";
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,UPDATE ON TABLE public.devices_switches TO "www-group";
 
 
 --
