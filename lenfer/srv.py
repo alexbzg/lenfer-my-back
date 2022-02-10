@@ -516,6 +516,7 @@ def get_device_info(device_id):
 		(select sensors.id, sensors.is_master, sensor_type as type, device_type_sensor_id,
 					sensors.title as title, device_type_sensors.title as default_title,
 					sensors.enabled, sensors.correction, device_type_sensors.modes,
+                    device_type_sensors.computed_expression,
                     device_type_sensors.sensors_group as group
 				from sensors join device_type_sensors on
 						device_type_sensors.id = sensors.device_type_sensor_id
@@ -531,6 +532,25 @@ def get_device_info(device_id):
         order by device_type_sensor_id
         """, {'device_id': device_id, 'timezone_ts': timezone_ts, 'timezone_dev': timezone_dev},\
             keys=False)
+
+    for computed_sensor in device_data['sensors']:
+        if computed_sensor['computed_expression']:
+            sensors_group = [sensor for sensor in device_data['sensors']\
+                if not sensor['computed_expression'] and\
+                sensor['group'] == computed_sensor['group']]
+            if sensors_group:
+                sensors_group_values = {'v' + str(idx): sensor['value'] for idx, sensor in enumerate(sensors_group)}
+                try:
+                    computed_sensor['value'] = round(eval(computed_sensor['computed_expression'],\
+                        {}, sensors_group_values), 2)
+                    computed_sensor['tstamp'] = sensors_group[0]['tstamp']
+                except Exception as exc:
+                    logging.exception(exc)
+                    logging.error('Error computing sensor value')
+                    logging.error('Exxpression: %s', computed_sensor['computed_expression'])
+                    logging.error('Values:')
+                    logging.error(sensors_group_values)
+
     device_data['switches'] = DB.execute("""
 		select * from
 		(select device_type_switch_id as id,
@@ -824,21 +844,75 @@ def get_sensor_data():
     if req_data.get('group'):
         tstamp_expr = "date_trunc('{}', tstamp)".format(req_data['group'])
         group_clause = "group by {}".format(tstamp_expr)
-        value_expr = "avg(value)"
+        value_expr = "round(avg(value), 2)"
 
-    data = DB.execute("""
-        select to_char({tstamp}::timestamp at time zone %(timezone_ts)s at time zone %(timezone_dev)s,
-            'YYYY-MM-DD HH24:MI:SS') as tstamp, {value} as value
-        from sensors_data
-            where sensor_id = %(sensor_id)s and
-                {tstamp}
-                    between 
-                        ((now() - interval %(interval)s)::timestamp at time zone %(timezone_srv)s 
-                            at time zone %(timezone_ts)s) and 
-                        (now()::timestamp at time zone %(timezone_srv)s at time zone %(timezone_ts)s)
-            {group_clause}
-            order by {tstamp}
-        """.format(value=value_expr, tstamp=tstamp_expr, group_clause=group_clause), req_data, keys=False)
+    data = []
+
+    computed_settings = DB.execute("""
+        select device_type_sensors.computed_expression as expression,
+            device_type_sensors.sensors_group as group, device_id
+            from sensors join device_type_sensors
+                on device_type_sensor_id = device_type_sensors.id
+            where sensors.id = %(sensor_id)s
+        """, req_data, keys=False)
+    if computed_settings['expression']:
+        group_ids = DB.execute("""
+            select sensors.id
+                from sensors join device_type_sensors
+                    on device_type_sensor_id = device_type_sensors.id
+                where device_id = %(device_id)s and computed_expression is null and
+                    sensors_group = %(group)s""", computed_settings, keys=False)
+        subqueries = []
+        conditions = []
+        prev_idx = None
+        for idx, sensor_id in enumerate(group_ids):
+            key = 'v' + str(idx)
+            if key in computed_settings['expression']:
+                req_data['id' + str(idx)] = sensor_id
+                subqueries.append("""
+                    (select {tstamp} as tstamp, {value} as v{idx}
+                    from sensors_data
+                        where sensor_id = %(id{idx})s and {tstamp}
+                            between 
+                                ((now() - interval %(interval)s)::timestamp at time zone %(timezone_srv)s 
+                                    at time zone %(timezone_ts)s) and 
+                                (now()::timestamp at time zone %(timezone_srv)s at time zone %(timezone_ts)s)
+                    {group_clause}
+                    order by {tstamp}) as t{idx}
+                """.format(value=value_expr, tstamp=tstamp_expr,\
+                        group_clause=group_clause, idx=idx))
+                if prev_idx is not None:
+                    conditions.append("t{prev_idx}.tstamp = t{idx}.tstamp".format(prev_idx=prev_idx,\
+                            idx=idx))
+                prev_idx = idx
+        where_clause = 'where ' + " and ".join(conditions) if conditions else ''
+        data = DB.execute("""
+            select to_char(t{idx}.tstamp::timestamp at time zone %(timezone_ts)s at time zone %(timezone_dev)s,
+                'YYYY-MM-DD HH24:MI:SS') as tstamp, round({value}, 2) as value
+            from 
+            {subqueries}
+            {where_clause}
+            order by t{idx}.tstamp
+            """.format(idx=prev_idx,\
+                    value=computed_settings['expression'],\
+                    subqueries=", ".join(subqueries),\
+                    where_clause=where_clause), req_data, keys=False)
+
+    else:
+        data = DB.execute("""
+            select to_char({tstamp}::timestamp at time zone %(timezone_ts)s at time zone %(timezone_dev)s,
+                'YYYY-MM-DD HH24:MI:SS') as tstamp, {value} as value
+            from sensors_data
+                where sensor_id = %(sensor_id)s and
+                    {tstamp}
+                        between 
+                            ((now() - interval %(interval)s)::timestamp at time zone %(timezone_srv)s 
+                                at time zone %(timezone_ts)s) and 
+                            (now()::timestamp at time zone %(timezone_srv)s at time zone %(timezone_ts)s)
+                {group_clause}
+                order by {tstamp}
+            """.format(value=value_expr, tstamp=tstamp_expr, group_clause=group_clause),\
+                    req_data, keys=False)
     return jsonify(data)
 
 @APP.route('/api/switch/state', methods=['POST'])
