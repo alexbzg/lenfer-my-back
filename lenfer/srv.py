@@ -818,18 +818,27 @@ def get_sensor_data():
     req_data['timezone_ts'], req_data['timezone_dev'], req_data['timezone_srv'] =\
         get_timezones(sensor_id=req_data['sensor_id'])
 
+    tstamp_expr = 'tstamp'
+    value_expr = 'value'
+    group_clause = ''
+    if req_data.get('group'):
+        tstamp_expr = "date_trunc('{}', tstamp)".format(req_data['group'])
+        group_clause = "group by {}".format(tstamp_expr)
+        value_expr = "avg(value)"
+
     data = DB.execute("""
-        select to_char(tstamp::timestamp at time zone %(timezone_ts)s at time zone %(timezone_dev)s,
-            'YYYY-MM-DD HH24:MI:SS') as tstamp, value
+        select to_char({tstamp}::timestamp at time zone %(timezone_ts)s at time zone %(timezone_dev)s,
+            'YYYY-MM-DD HH24:MI:SS') as tstamp, {value} as value
         from sensors_data
             where sensor_id = %(sensor_id)s and
-                tstamp 
+                {tstamp}
                     between 
                         ((now() - interval %(interval)s)::timestamp at time zone %(timezone_srv)s 
                             at time zone %(timezone_ts)s) and 
                         (now()::timestamp at time zone %(timezone_srv)s at time zone %(timezone_ts)s)
-            order by tstamp
-        """, req_data, keys=False)
+            {group_clause}
+            order by {tstamp}
+        """.format(value=value_expr, tstamp=tstamp_expr, group_clause=group_clause), req_data, keys=False)
     return jsonify(data)
 
 @APP.route('/api/switch/state', methods=['POST'])
