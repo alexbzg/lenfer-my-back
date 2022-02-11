@@ -38,11 +38,20 @@ CREATE FUNCTION public.tf_sensors_data_bi() RETURNS trigger
     LANGUAGE plpgsql
     AS $$declare
 	correction numeric;
+	sensor_precision smallint;
 begin
-	select sensors.correction from sensors where id = new.sensor_id and sensors.correction is not null into correction;
+	select sensors.correction 
+		from sensors 
+		where id = new.sensor_id and sensors.correction is not null 
+		into correction;
 	if found then
 		new.value = new.value + correction;
 	end if;
+	select device_type_sensors.sensor_precision 
+		from device_type_sensors join sensors on device_type_sensors.id = sensors.device_type_sensor_id
+		where sensors.id = new.sensor_id
+		into sensor_precision;
+	new.value = round(new.value, sensor_precision);
 	return new;
 end;
 	$$;
@@ -115,7 +124,9 @@ CREATE TABLE public.device_type_sensors (
     title character varying(64) NOT NULL,
     is_master boolean DEFAULT false,
     modes jsonb,
-    sensors_group smallint
+    sensors_group smallint,
+    computed_expression character varying(128),
+    sensor_precision smallint DEFAULT 2 NOT NULL
 );
 
 
