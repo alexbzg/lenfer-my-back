@@ -838,36 +838,39 @@ def get_sensor_data():
     req_data['timezone_ts'], req_data['timezone_dev'], req_data['timezone_srv'] =\
         get_timezones(sensor_id=req_data['sensor_id'])
 
+
+    sensor_settings = DB.execute("""
+        select device_type_sensors.computed_expression as expression,
+            device_type_sensors.sensor_precision,
+            device_type_sensors.sensors_group as group, device_id
+            from sensors join device_type_sensors
+                on device_type_sensor_id = device_type_sensors.id
+            where sensors.id = %(sensor_id)s
+        """, req_data, keys=False)
+
     tstamp_expr = 'tstamp'
     value_expr = 'value'
     group_clause = ''
     if req_data.get('group'):
         tstamp_expr = "date_trunc('{}', tstamp)".format(req_data['group'])
         group_clause = "group by {}".format(tstamp_expr)
-        value_expr = "round(avg(value), 2)"
+        value_expr = "round(avg(value), {})".format(sensor_settings['sensor_precision'])
 
     data = []
 
-    computed_settings = DB.execute("""
-        select device_type_sensors.computed_expression as expression,
-            device_type_sensors.sensors_group as group, device_id
-            from sensors join device_type_sensors
-                on device_type_sensor_id = device_type_sensors.id
-            where sensors.id = %(sensor_id)s
-        """, req_data, keys=False)
-    if computed_settings['expression']:
+    if sensor_settings['expression']:
         group_ids = DB.execute("""
             select sensors.id
                 from sensors join device_type_sensors
                     on device_type_sensor_id = device_type_sensors.id
                 where device_id = %(device_id)s and computed_expression is null and
-                    sensors_group = %(group)s""", computed_settings, keys=False)
+                    sensors_group = %(group)s""", sensor_settings, keys=False)
         subqueries = []
         conditions = []
         prev_idx = None
         for idx, sensor_id in enumerate(group_ids):
             key = 'v' + str(idx)
-            if key in computed_settings['expression']:
+            if key in sensor_settings['expression']:
                 req_data['id' + str(idx)] = sensor_id
                 subqueries.append("""
                     (select {tstamp} as tstamp, {value} as v{idx}
@@ -888,13 +891,14 @@ def get_sensor_data():
         where_clause = 'where ' + " and ".join(conditions) if conditions else ''
         data = DB.execute("""
             select to_char(t{idx}.tstamp::timestamp at time zone %(timezone_ts)s at time zone %(timezone_dev)s,
-                'YYYY-MM-DD HH24:MI:SS') as tstamp, round({value}, 2) as value
+                'YYYY-MM-DD HH24:MI:SS') as tstamp, round({value}, {precision}) as value
             from 
             {subqueries}
             {where_clause}
             order by t{idx}.tstamp
             """.format(idx=prev_idx,\
-                    value=computed_settings['expression'],\
+                    value=sensor_settings['expression'],\
+                    precision=sensor_settings['sensor_precision'],\
                     subqueries=", ".join(subqueries),\
                     where_clause=where_clause), req_data, keys=False)
 
