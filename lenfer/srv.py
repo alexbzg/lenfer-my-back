@@ -532,24 +532,24 @@ def get_device_info(device_id):
         order by device_type_sensor_id
         """, {'device_id': device_id, 'timezone_ts': timezone_ts, 'timezone_dev': timezone_dev},\
             keys=False)
-
-    for computed_sensor in device_data['sensors']:
-        if computed_sensor['computed_expression']:
-            sensors_group = [sensor for sensor in device_data['sensors']\
-                if not sensor['computed_expression'] and\
-                sensor['group'] == computed_sensor['group']]
-            if sensors_group:
-                sensors_group_values = {'v' + str(idx): sensor['value'] for idx, sensor in enumerate(sensors_group)}
-                try:
-                    computed_sensor['value'] = round(eval(computed_sensor['computed_expression'],\
-                        {}, sensors_group_values), 2)
-                    computed_sensor['tstamp'] = sensors_group[0]['tstamp']
-                except Exception as exc:
-                    logging.exception(exc)
-                    logging.error('Error computing sensor value')
-                    logging.error('Exxpression: %s', computed_sensor['computed_expression'])
-                    logging.error('Values:')
-                    logging.error(sensors_group_values)
+    if device_data['sensors']:
+        for computed_sensor in device_data['sensors']:
+            if computed_sensor['computed_expression']:
+                sensors_group = [sensor for sensor in device_data['sensors']\
+                    if not sensor['computed_expression'] and\
+                    sensor['group'] == computed_sensor['group']]
+                if sensors_group:
+                    sensors_group_values = {'v' + str(idx): sensor['value'] for idx, sensor in enumerate(sensors_group)}
+                    try:
+                        computed_sensor['value'] = round(eval(computed_sensor['computed_expression'],\
+                            {}, sensors_group_values), 2)
+                        computed_sensor['tstamp'] = sensors_group[0]['tstamp']
+                    except Exception as exc:
+                        logging.exception(exc)
+                        logging.error('Error computing sensor value')
+                        logging.error('Exxpression: %s', computed_sensor['computed_expression'])
+                        logging.error('Values:')
+                        logging.error(sensors_group_values)
 
     device_data['switches'] = DB.execute("""
 		select * from
