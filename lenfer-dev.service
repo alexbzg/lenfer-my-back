@@ -1,0 +1,14 @@
+[Unit]
+Description=lenfer-dev backend server
+After=network.target postgresql@9.6-main.service 
+
+[Service]
+ExecStart=/usr/local/bin/gunicorn --workers 1 --bind localhost:5001 -m 007 srv:APP
+Restart=always
+User=www-data
+Group=www-data
+WorkingDirectory=/usr/local/lenfer-dev/lenfer
+
+
+[Install]
+WantedBy=multi-user.target
