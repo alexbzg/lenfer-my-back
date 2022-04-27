@@ -9,6 +9,8 @@ from datetime import datetime
 
 from flask import Flask, request, jsonify
 from werkzeug.exceptions import HTTPException
+from simplejson import JSONEncoder, JSONDecoder
+
 from hashids import Hashids
 
 from validator import validate, bad_request
@@ -22,6 +24,9 @@ from json_utils import load_json
 APP = Flask(APP_NAME)
 APP.config.update(CONF['flask'])
 APP.secret_key = get_secret(CONF['files']['secret'])
+APP.json_encoder = JSONEncoder
+APP.json_decoder = JSONDecoder
+
 HASHIDS = Hashids(salt=APP.secret_key.decode('utf-8'), min_length=6)
 TIMEZONES = load_json(APP_ROOT + '/timezones.json')
 
@@ -891,7 +896,7 @@ def get_sensor_data():
         where_clause = 'where ' + " and ".join(conditions) if conditions else ''
         data = DB.execute("""
             select to_char(t{idx}.tstamp::timestamp at time zone %(timezone_ts)s at time zone %(timezone_dev)s,
-                'YYYY-MM-DD HH24:MI:SS') as tstamp, round({value}, {precision}) as value
+                'YYYY-MM-DD HH24:MI:SS') as tstamp, round({value}, {precision})::float as value
             from 
             {subqueries}
             {where_clause}

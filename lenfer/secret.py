@@ -22,7 +22,7 @@ def get_secret(fpath):
 def create_token(data, secret):
     """creates web token"""
     try:
-        return jwt.encode(data, secret, algorithm='HS256').decode('utf-8')
+        return jwt.encode(data, secret, algorithm='HS256')
     except Exception:
         logging.exception('Token generation error')
         return None
